@@ -177,7 +177,7 @@ public class csp_MoGu extends Spider {
         StringBuilder vodPlayUrl  = new StringBuilder();
 
         // 提取所有播放链接 /vodplay/{vid}-{sid}-{ep}.html
-        Pattern pt = Pattern.compile("/vodplay/(\d+)-(\d+)-(\d+)\.html");
+        Pattern pt = Pattern.compile("/vodplay/(\\d+)-(\\d+)-(\\d+)\\.html");
         Matcher m = pt.matcher(html);
 
         Map<String, List<String[]>> sourceMap = new LinkedHashMap<>(); // sid -> [(epName, url)]
@@ -299,13 +299,13 @@ public class csp_MoGu extends Spider {
 
         // 解析 player_aaaa 配置
         String playUrl = "";
-        Matcher pm = Pattern.compile("var player_aaaa=\{([^;]+)\};", Pattern.DOTALL).matcher(html);
+        Matcher pm = Pattern.compile("var player_aaaa=\\{([^;]+)\\};", Pattern.DOTALL).matcher(html);
         if (!pm.find()) {
-            pm = Pattern.compile("var player_[a-zA-Z0-9_]+=\{([^;]+)\};", Pattern.DOTALL).matcher(html);
+            pm = Pattern.compile("var player_[a-zA-Z0-9_]+=\\{([^;]+)\\};", Pattern.DOTALL).matcher(html);
         }
         if (pm.find()) {
             String cfg = pm.group(1);
-            Matcher m = Pattern.compile(""url"\s*:\s*"([^"]+)"").matcher(cfg);
+            Matcher m = Pattern.compile("\"url\"\s*:\s*\"([^\"]+)\"").matcher(cfg);
             if (m.find()) {
                 playUrl = decodeVideoUrl(m.group(1));
             }
@@ -313,7 +313,7 @@ public class csp_MoGu extends Spider {
 
         // 如果上面没找到，尝试直接匹配m3u8
         if (playUrl.isEmpty()) {
-            Matcher m3u8 = Pattern.compile("(https?://[^\s"']+\.m3u8)").matcher(html);
+            Matcher m3u8 = Pattern.compile("(https?://[^\\s\"\'\\]+\\.m3u8)").matcher(html);
             if (m3u8.find()) playUrl = m3u8.group(1);
         }
 
@@ -397,9 +397,9 @@ public class csp_MoGu extends Spider {
      */
     private String extractIdFromUrl(String url) {
         if (url == null) return "";
-        Matcher m = Pattern.compile("/voddetail/(\d+)\.html").matcher(url);
+        Matcher m = Pattern.compile("/voddetail/(\\d+)\\.html").matcher(url);
         if (m.find()) return m.group(1);
-        m = Pattern.compile("/vodplay/(\d+)-").matcher(url);
+        m = Pattern.compile("/vodplay/(\\d+)-").matcher(url);
         if (m.find()) return m.group(1);
         return "";
     }
