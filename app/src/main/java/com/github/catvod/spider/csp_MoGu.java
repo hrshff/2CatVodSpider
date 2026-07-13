@@ -4,11 +4,12 @@ import android.content.Context;
 
 import com.github.catvod.bean.Class;
 import com.github.catvod.bean.Filter;
-import com.github.catvod.bean.Result;
 import com.github.catvod.bean.Vod;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -30,7 +31,7 @@ import java.util.regex.Pattern;
  * TVBox Spider 插件 — 蘑菇影视 (www.5o5k.com)
  * ============================================================
  * 基于 MacCMS V10 架构，支持首页、分类、搜索、详情、播放
- * 
+ *
  * 配置说明:
  * {
  *     "key": "csp_MoGu",
@@ -96,7 +97,48 @@ public class csp_MoGu extends Spider {
             // 这里简化处理，如需可扩展
         }
 
-        return Result.string(classes, list, filters);
+        // 手动构建 JSON 返回
+        JSONObject result = new JSONObject();
+        JSONArray classArray = new JSONArray();
+        for (Class cls : classes) {
+            JSONObject c = new JSONObject();
+            c.put("type_id", cls.getTypeId());
+            c.put("type_name", cls.getTypeName());
+            classArray.put(c);
+        }
+        result.put("class", classArray);
+
+        JSONArray jsonList = new JSONArray();
+        for (Vod vod : list) {
+            jsonList.put(vodToJson(vod));
+        }
+        result.put("list", jsonList);
+
+        // 如果有筛选条件，可以在这里添加 filters
+        if (filter && !filters.isEmpty()) {
+            JSONObject filtersObj = new JSONObject();
+            for (Map.Entry<String, List<Filter>> entry : filters.entrySet()) {
+                JSONArray filterArray = new JSONArray();
+                for (Filter f : entry.getValue()) {
+                    JSONObject fo = new JSONObject();
+                    fo.put("key", f.getKey());
+                    fo.put("name", f.getName());
+                    JSONArray valueArray = new JSONArray();
+                    for (Filter.Value v : f.getValue()) {
+                        JSONObject vo = new JSONObject();
+                        vo.put("n", v.getN());
+                        vo.put("v", v.getV());
+                        valueArray.put(vo);
+                    }
+                    fo.put("value", valueArray);
+                    filterArray.put(fo);
+                }
+                filtersObj.put(entry.getKey(), filterArray);
+            }
+            result.put("filters", filtersObj);
+        }
+
+        return result.toString();
     }
 
     /**
@@ -106,7 +148,14 @@ public class csp_MoGu extends Spider {
     public String homeVideoContent() throws Exception {
         String html = OkHttp.string(SITE_URL, getHeader());
         List<Vod> list = parseVodListFromHtml(html, "a[href*=/voddetail/]");
-        return Result.string(list);
+
+        JSONObject result = new JSONObject();
+        JSONArray jsonList = new JSONArray();
+        for (Vod vod : list) {
+            jsonList.put(vodToJson(vod));
+        }
+        result.put("list", jsonList);
+        return result.toString();
     }
 
     // ==================== 分类 ====================
@@ -129,8 +178,19 @@ public class csp_MoGu extends Spider {
         // 解析总页数
         int pageCount = parseTotalPage(html);
 
-        return Result.get().page(Integer.parseInt(pg), pageCount, 40, list.size())
-                .list(list).string();
+        JSONObject result = new JSONObject();
+        result.put("page", Integer.parseInt(pg));
+        result.put("pagecount", pageCount > 0 ? pageCount : 1);
+        result.put("limit", 40);
+        result.put("total", list.size());
+
+        JSONArray jsonList = new JSONArray();
+        for (Vod vod : list) {
+            jsonList.put(vodToJson(vod));
+        }
+        result.put("list", jsonList);
+
+        return result.toString();
     }
 
     // ==================== 详情 ====================
@@ -177,7 +237,7 @@ public class csp_MoGu extends Spider {
         StringBuilder vodPlayUrl  = new StringBuilder();
 
         // 提取所有播放链接 /vodplay/{vid}-{sid}-{ep}.html
-        Pattern pt = Pattern.compile("/vodplay/(\\d+)-(\\d+)-(\\d+)\\.html");
+        Pattern pt = Pattern.compile("/vodplay/(\d+)-(\d+)-(\d+)\.html");
         Matcher m = pt.matcher(html);
 
         Map<String, List<String[]>> sourceMap = new LinkedHashMap<>(); // sid -> [(epName, url)]
@@ -238,19 +298,24 @@ public class csp_MoGu extends Spider {
             sourceIndex++;
         }
 
-        Vod vod = new Vod();
-        vod.setVodId(id);
-        vod.setVodName(vodName);
-        vod.setVodPic(vodPic);
-        vod.setVodActor(vodActor);
-        vod.setVodDirector(vodDirector);
-        vod.setTypeName(vodClass);
-        vod.setVodArea(vodArea);
-        vod.setVodContent(vodContent);
-        vod.setVodPlayFrom(vodPlayFrom.toString());
-        vod.setVodPlayUrl(vodPlayUrl.toString());
+        // 手动构建详情 JSON
+        JSONObject result = new JSONObject();
+        JSONArray listArray = new JSONArray();
+        JSONObject item = new JSONObject();
+        item.put("vod_id", id);
+        item.put("vod_name", vodName);
+        item.put("vod_pic", vodPic);
+        item.put("type_name", vodClass);
+        item.put("vod_area", vodArea);
+        item.put("vod_actor", vodActor);
+        item.put("vod_director", vodDirector);
+        item.put("vod_content", vodContent);
+        item.put("vod_play_from", vodPlayFrom.toString());
+        item.put("vod_play_url", vodPlayUrl.toString());
+        listArray.put(item);
+        result.put("list", listArray);
 
-        return Result.string(vod);
+        return result.toString();
     }
 
     // ==================== 搜索 ====================
@@ -280,8 +345,19 @@ public class csp_MoGu extends Spider {
         int pageCount = parseTotalPage(html);
         if (pageCount < 0) pageCount = 1;
 
-        return Result.get().page(Integer.parseInt(pg), pageCount, 40, list.size())
-                .list(list).string();
+        JSONObject result = new JSONObject();
+        result.put("page", Integer.parseInt(pg));
+        result.put("pagecount", pageCount);
+        result.put("limit", 40);
+        result.put("total", list.size());
+
+        JSONArray jsonList = new JSONArray();
+        for (Vod vod : list) {
+            jsonList.put(vodToJson(vod));
+        }
+        result.put("list", jsonList);
+
+        return result.toString();
     }
 
     // ==================== 播放 ====================
@@ -313,11 +389,24 @@ public class csp_MoGu extends Spider {
 
         // 如果上面没找到，尝试直接匹配m3u8
         if (playUrl.isEmpty()) {
-            Matcher m3u8 = Pattern.compile("(https?://[^\\s\"\'\\]+\\.m3u8)").matcher(html);
+            Matcher m3u8 = Pattern.compile("(https?://[^\s\"']+\.m3u8)").matcher(html);
             if (m3u8.find()) playUrl = m3u8.group(1);
         }
 
-        return Result.get().url(playUrl).header(getHeader()).string();
+        // 手动构建播放 JSON
+        JSONObject result = new JSONObject();
+        result.put("parse", 0);
+        result.put("url", playUrl);
+
+        // 添加 header
+        JSONObject headerObj = new JSONObject();
+        Map<String, String> headers = getHeader();
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            headerObj.put(entry.getKey(), entry.getValue());
+        }
+        result.put("header", headerObj);
+
+        return result.toString();
     }
 
     // ==================== 视频格式检测 ====================
@@ -333,6 +422,18 @@ public class csp_MoGu extends Spider {
     }
 
     // ==================== 私有工具方法 ====================
+
+    /**
+     * 将 Vod 对象转换为 JSONObject
+     */
+    private JSONObject vodToJson(Vod vod) {
+        JSONObject item = new JSONObject();
+        item.put("vod_id", vod.getVodId());
+        item.put("vod_name", vod.getVodName());
+        item.put("vod_pic", vod.getVodPic());
+        item.put("vod_remarks", vod.getVodRemarks());
+        return item;
+    }
 
     /**
      * 构建请求头
@@ -397,9 +498,9 @@ public class csp_MoGu extends Spider {
      */
     private String extractIdFromUrl(String url) {
         if (url == null) return "";
-        Matcher m = Pattern.compile("/voddetail/(\\d+)\\.html").matcher(url);
+        Matcher m = Pattern.compile("/voddetail/(\d+)\.html").matcher(url);
         if (m.find()) return m.group(1);
-        m = Pattern.compile("/vodplay/(\\d+)-").matcher(url);
+        m = Pattern.compile("/vodplay/(\d+)-").matcher(url);
         if (m.find()) return m.group(1);
         return "";
     }
@@ -443,7 +544,7 @@ public class csp_MoGu extends Spider {
                 result = dec;
             } catch (Exception e) { break; }
         }
-        result = result.replace("\\/", "/");
+        result = result.replace("\/", "/");
         if (!result.startsWith("http")) {
             if (result.startsWith("//")) result = "https:" + result;
             else if (result.startsWith("/")) result = SITE_URL + result;
