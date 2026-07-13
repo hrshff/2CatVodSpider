@@ -1,1 +1,115 @@
+name: Build Spider JAR
 
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 允许写入仓库
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}  # 使用默认token提交
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - name: Build APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Generate JAR
+        run: |
+          cd jar
+          DIR="$(pwd)"
+          APK="$DIR/../app/build/outputs/apk/release/app-release-unsigned.apk"
+          WORK="$DIR/Smali_classes"
+          SPIDER="$DIR/spider.jar"
+          OUT="$DIR/custom_spider.jar"
+          MD5="$OUT.md5"
+
+          if [ ! -f "$APK" ]; then
+            echo "Missing APK: $APK"
+            ls -la "$DIR/../app/build/outputs/apk/release/"
+            exit 1
+          fi
+
+          rm -f "$OUT" "$MD5"
+          rm -rf "$WORK" "$SPIDER"
+
+          echo "Decompiling APK..."
+          java -jar "$DIR/3rd/apktool_2.11.0.jar" d -f --only-main-classes "$APK" -o "$WORK"
+
+          echo "Preparing spider structure..."
+          mkdir -p "$SPIDER/smali/com/github/catvod"
+          cp "$WORK/apktool.yml" "$SPIDER/" 2>/dev/null || true
+
+          if [ -d "$WORK/smali/com/github/catvod/spider" ]; then
+            cp -r "$WORK/smali/com/github/catvod/spider" "$SPIDER/smali/com/github/catvod/"
+            echo "Spider classes copied"
+          fi
+
+          if [ -d "$WORK/smali/com/github/catvod/js" ]; then
+            cp -r "$WORK/smali/com/github/catvod/js" "$SPIDER/smali/com/github/catvod/"
+            echo "JS classes copied"
+          fi
+
+          echo "Repacking JAR..."
+          java -jar "$DIR/3rd/apktool_2.11.0.jar" b "$SPIDER" -c
+
+          # 修正：apktool 输出的是 apk 文件，不是 dex.jar
+          ls -la "$SPIDER/dist/"
+
+          # 从 dist 目录找到生成的文件并重命名
+          if [ -f "$SPIDER/dist/app-release-unsigned.apk" ]; then
+            mv "$SPIDER/dist/app-release-unsigned.apk" "$OUT"
+          elif [ -f "$SPIDER/dist/dex.jar" ]; then
+            mv "$SPIDER/dist/dex.jar" "$OUT"
+          else
+            echo "Available files in dist:"
+            ls -la "$SPIDER/dist/"
+            exit 1
+          fi
+
+          md5sum "$OUT" | awk '{print $1}' > "$MD5"
+          rm -rf "$SPIDER" "$WORK"
+
+          echo "Done!"
+          ls -lh "$OUT"
+
+      - name: Check JAR
+        run: |
+          ls -lh jar/custom_spider.jar
+          unzip -l jar/custom_spider.jar | grep "YueGuang" || echo "No YueGuang found"
+
+      - name: Commit and Push JAR to repo
+        run: |
+          echo "=== 提交 JAR 到仓库 ==="
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 检查是否有变更
+          git add jar/custom_spider.jar jar/custom_spider.jar.md5
+
+          if git diff --cached --quiet; then
+            echo "⚠️ JAR 没有变化，跳过提交"
+          else
+            git commit -m "chore: update custom_spider.jar [skip ci]"
+            git push
+            echo "✅ JAR 已提交到仓库"
+          fi
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: custom_spider
+          path: jar/custom_spider.jar
