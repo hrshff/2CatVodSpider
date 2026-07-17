@@ -51,9 +51,9 @@ public class YingHua extends Spider {
 
     private String extractId(String url) {
         if (TextUtils.isEmpty(url)) return "";
-        Matcher m = Pattern.compile("/v/(\d+)\.html").matcher(url);
+        Matcher m = Pattern.compile("/v/(\\d+)\\.html").matcher(url);
         if (m.find()) return m.group(1);
-        m = Pattern.compile("/v/(\d+)-").matcher(url);
+        m = Pattern.compile("/v/(\\d+)-").matcher(url);
         if (m.find()) return m.group(1);
         return "";
     }
@@ -98,7 +98,7 @@ public class YingHua extends Spider {
             String pic = "";
             String style = link.attr("style");
             if (!TextUtils.isEmpty(style)) {
-                Matcher m = Pattern.compile("url\((.*?)\)").matcher(style);
+                Matcher m = Pattern.compile("url\\((.*?)\\)").matcher(style);
                 if (m.find()) {
                     pic = m.group(1).trim();
                     if ((pic.startsWith("\"") && pic.endsWith("\"")) ||
@@ -291,11 +291,11 @@ public class YingHua extends Spider {
 
         // 尝试提取 player_aaaa
         String playerJson = "";
-        Matcher m = Pattern.compile("var player_aaaa\s*=\s*(\{.*?\});", Pattern.DOTALL).matcher(html);
+        Matcher m = Pattern.compile("var player_aaaa\\s*=\\s*(\\{.*?\\});", Pattern.DOTALL).matcher(html);
         if (m.find()) {
             playerJson = m.group(1);
         } else {
-            m = Pattern.compile("var player_\w+\s*=\s*(\{.*?\});", Pattern.DOTALL).matcher(html);
+            m = Pattern.compile("var player_\\w+\\s*=\\s*(\\{.*?\\});", Pattern.DOTALL).matcher(html);
             if (m.find()) playerJson = m.group(1);
         }
 
