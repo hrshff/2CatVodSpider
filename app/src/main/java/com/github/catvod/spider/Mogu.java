@@ -3,7 +3,6 @@ package com.github.catvod.spider;
 import android.content.Context;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
-import com.github.catvod.utils.Util;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
@@ -230,7 +229,7 @@ public class Mogu extends Spider {
 
         String html = fetch(id);
 
-        // 提取播放器变量
+        // 提取播放器变量: var player_aaaa = {...};
         Pattern pattern = Pattern.compile("var player_\w+\s*=\s*\{.*?\};", Pattern.DOTALL);
         Matcher matcher = pattern.matcher(html);
 
@@ -246,7 +245,7 @@ public class Mogu extends Spider {
             String playerStr = matcher.group();
 
             // 提取 url
-            Pattern urlPattern = Pattern.compile('"url"\s*:\s*"([^"]*)"');
+            Pattern urlPattern = Pattern.compile("\"url\"\s*:\s*\"([^\"]*)\"");
             Matcher urlMatcher = urlPattern.matcher(playerStr);
             if (!urlMatcher.find()) {
                 JSONObject result = new JSONObject();
@@ -260,7 +259,7 @@ public class Mogu extends Spider {
 
             // 提取 encrypt
             int encrypt = 0;
-            Pattern encPattern = Pattern.compile('"encrypt"\s*:\s*(\d+)');
+            Pattern encPattern = Pattern.compile("\"encrypt\"\s*:\s*(\d+)");
             Matcher encMatcher = encPattern.matcher(playerStr);
             if (encMatcher.find()) {
                 encrypt = Integer.parseInt(encMatcher.group(1));
