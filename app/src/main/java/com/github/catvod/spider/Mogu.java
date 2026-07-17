@@ -228,8 +228,6 @@ public class Mogu extends Spider {
 
         String html = fetch(id);
 
-        // 提取播放器变量: var player_aaaa = {...};
-        // Java字符串中 \ 必须双写，所以正则 \w 要写成 \\w
         Pattern pattern = Pattern.compile("var player_\\w+\\s*=\\s*\\{.*?\\};", Pattern.DOTALL);
         Matcher matcher = pattern.matcher(html);
 
@@ -244,8 +242,6 @@ public class Mogu extends Spider {
         try {
             String playerStr = matcher.group();
 
-            // 提取 url: "url"\s*:\s*"([^"]*)"
-            // Java字符串中 " 要写成 \"，\s 要写成 \\s
             Pattern urlPattern = Pattern.compile("\\\"url\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"");
             Matcher urlMatcher = urlPattern.matcher(playerStr);
             if (!urlMatcher.find()) {
@@ -258,7 +254,6 @@ public class Mogu extends Spider {
 
             String mediaUrl = urlMatcher.group(1);
 
-            // 提取 encrypt: "encrypt"\s*:\s*(\d+)
             int encrypt = 0;
             Pattern encPattern = Pattern.compile("\\\"encrypt\\\"\\s*:\\s*(\\d+)");
             Matcher encMatcher = encPattern.matcher(playerStr);
@@ -266,7 +261,6 @@ public class Mogu extends Spider {
                 encrypt = Integer.parseInt(encMatcher.group(1));
             }
 
-            // 如果 encrypt=1，URL 是 URL 编码的，需要解码
             if (encrypt == 1) {
                 mediaUrl = java.net.URLDecoder.decode(mediaUrl, "UTF-8");
             }
@@ -331,7 +325,8 @@ public class Mogu extends Spider {
         return result.toString();
     }
 
-    private JSONArray parsePosterItems(Document doc) {
+    // 加上 throws Exception 声明，因为 JSONObject.put 会抛出 JSONException
+    private JSONArray parsePosterItems(Document doc) throws Exception {
         JSONArray list = new JSONArray();
         Elements items = doc.select(".module-poster-item");
 
@@ -361,7 +356,8 @@ public class Mogu extends Spider {
         return list;
     }
 
-    private JSONArray parseSearchItems(Document doc) {
+    // 加上 throws Exception 声明
+    private JSONArray parseSearchItems(Document doc) throws Exception {
         JSONArray list = new JSONArray();
         Elements items = doc.select(".module-card-item");
 
