@@ -299,6 +299,9 @@ public class YingHua extends Spider {
             if (m.find()) playerJson = m.group(1);
         }
 
+        HashMap<String, String> header = getHeaders();
+        header.put("Origin", SITE_URL);
+
         if (!TextUtils.isEmpty(playerJson)) {
             try {
                 org.json.JSONObject player = new org.json.JSONObject(playerJson);
@@ -315,17 +318,15 @@ public class YingHua extends Spider {
 
                 url = fixUrl(url);
 
+                // 只有提取到直链时才返回 parse:0
                 boolean isM3u8 = url.contains(".m3u8");
                 boolean isMp4 = url.contains(".mp4");
-                int parse = (isM3u8 || isMp4) ? 0 : 1;
-
-                HashMap<String, String> header = getHeaders();
-                header.put("Origin", SITE_URL);
-
-                return Result.get().url(url).parse(parse).header(header).string();
-
+                if (isM3u8 || isMp4) {
+                    return Result.get().url(url).parse(0).header(header).string();
+                }
+                // 非直链：回退到播放页解析
             } catch (Exception e) {
-                return Result.get().url("").msg("解析失败: " + e.getMessage()).string();
+                // 回退到播放页解析
             }
         }
 
@@ -333,10 +334,11 @@ public class YingHua extends Spider {
         Element iframe = Jsoup.parse(html).selectFirst("iframe");
         if (iframe != null) {
             String src = fixUrl(iframe.attr("src"));
-            return Result.get().url(src).header(getHeaders()).string();
+            return Result.get().url(src).parse(1).header(header).string();
         }
 
-        return Result.get().url(playUrl).header(getHeaders()).string();
+        // 最终回退：返回原始播放页让 webview 解析
+        return Result.get().url(playUrl).parse(1).header(header).string();
     }
 
     @Override
