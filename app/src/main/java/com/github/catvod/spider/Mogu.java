@@ -47,7 +47,7 @@ public class Mogu extends Spider {
     }
 
     @Override
-    public void init(Context context, String extend) {
+    public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
     }
 
@@ -325,7 +325,6 @@ public class Mogu extends Spider {
         return result.toString();
     }
 
-    // 加上 throws Exception 声明，因为 JSONObject.put 会抛出 JSONException
     private JSONArray parsePosterItems(Document doc) throws Exception {
         JSONArray list = new JSONArray();
         Elements items = doc.select(".module-poster-item");
@@ -356,7 +355,6 @@ public class Mogu extends Spider {
         return list;
     }
 
-    // 加上 throws Exception 声明
     private JSONArray parseSearchItems(Document doc) throws Exception {
         JSONArray list = new JSONArray();
         Elements items = doc.select(".module-card-item");
