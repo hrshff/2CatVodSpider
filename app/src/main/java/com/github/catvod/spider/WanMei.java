@@ -372,15 +372,16 @@ public class WanMei extends Spider {
         header.put("Origin", SITE_URL);
         header.put("Referer", playUrl);
 
+        // YZ节点(yzzy)有防盗链，必须走播放页webview解析
+        if (flag.contains("YZ") || flag.contains("yz")) {
+            // 返回播放页URL，让webview加载完整页面（含播放器+防盗链校验）
+            return Result.get().url(playUrl).parse(1).header(header).string();
+        }
+
         if (!TextUtils.isEmpty(url)) {
             boolean isM3u8 = url.contains(".m3u8");
             boolean isMp4 = url.contains(".mp4");
             if (isM3u8 || isMp4) {
-                // YZ节点(yzzy)有防盗链，走webview解析
-                if (flag.contains("YZ") || flag.contains("yz")) {
-                    return Result.get().url(url).parse(1).header(header).string();
-                }
-                // 其他节点走直链
                 return Result.get().url(url).parse(0).header(header).string();
             }
         }
