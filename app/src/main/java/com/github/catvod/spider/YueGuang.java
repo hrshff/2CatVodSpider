@@ -114,7 +114,7 @@ public class YueGuang extends Spider {
             list.add(vod);
         }
 
-        // ========== 影片列表 ==========
+        // ========== 影片列表（首页用 .stui-vodlist__box） ==========
         Elements items = doc.select(".stui-vodlist__box");
         for (Element item : items) {
             Element link = item.selectFirst(".stui-vodlist__thumb");
@@ -166,7 +166,8 @@ public class YueGuang extends Spider {
         String html = fetch(url);
         Document doc = Jsoup.parse(html);
 
-        Elements items = doc.select(".stui-vodlist__box");
+        // ========== 分类页用 .stui-vodlist__item（不是 .stui-vodlist__box） ==========
+        Elements items = doc.select(".stui-vodlist__item");
         for (Element item : items) {
             Element link = item.selectFirst(".stui-vodlist__thumb");
             if (link == null) continue;
@@ -176,8 +177,24 @@ public class YueGuang extends Spider {
             String id = extractId(href);
             if (TextUtils.isEmpty(id) || TextUtils.isEmpty(title)) continue;
 
-            String pic = link.attr("data-original");
-            if (TextUtils.isEmpty(pic)) pic = link.attr("src");
+            String pic = "";
+            String style = link.attr("style");
+            if (!TextUtils.isEmpty(style)) {
+                Matcher m = Pattern.compile("url\\((.*?)\\)").matcher(style);
+                if (m.find()) {
+                    pic = m.group(1).trim();
+                    if ((pic.startsWith("\"") && pic.endsWith("\"")) ||
+                        (pic.startsWith("'") && pic.endsWith("'"))) {
+                        pic = pic.substring(1, pic.length() - 1);
+                    }
+                }
+            }
+            if (TextUtils.isEmpty(pic)) {
+                pic = link.attr("data-original");
+            }
+            if (TextUtils.isEmpty(pic)) {
+                pic = link.attr("src");
+            }
 
             String status = "";
             Element note = link.selectFirst(".pic-text");
@@ -389,6 +406,7 @@ public class YueGuang extends Spider {
         String html = fetch(url);
         Document doc = Jsoup.parse(html);
 
+        // 搜索页可能用 .stui-vodlist__thumb 或 .v-thumb
         Elements items = doc.select(".stui-vodlist__thumb, .v-thumb");
         for (Element item : items) {
             String href = fixUrl(item.attr("href"));
