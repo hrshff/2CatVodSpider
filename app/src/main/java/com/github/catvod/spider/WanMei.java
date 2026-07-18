@@ -92,7 +92,6 @@ public class WanMei extends Spider {
             String title = "";
             Element h4 = link.selectFirst("h4");
             if (h4 != null) title = h4.text().trim();
-            // 回退: img alt
             if (TextUtils.isEmpty(title)) {
                 Element img = link.selectFirst("img");
                 if (img != null) title = img.attr("alt");
@@ -118,7 +117,6 @@ public class WanMei extends Spider {
         // ========== 影片列表 ==========
         Elements items = doc.select("a.media-content");
         for (Element item : items) {
-            // 跳过轮播图已处理的
             String href = fixUrl(item.attr("href"));
             String id = extractId(href);
             if (TextUtils.isEmpty(id)) continue;
@@ -126,10 +124,7 @@ public class WanMei extends Spider {
 
             String title = "";
             Element img = item.selectFirst("img");
-            if (img != null) {
-                title = img.attr("alt");
-            }
-            // 回退: 旁边h3
+            if (img != null) title = img.attr("alt");
             if (TextUtils.isEmpty(title)) {
                 Element parent = item.parent();
                 if (parent != null) {
@@ -190,9 +185,7 @@ public class WanMei extends Spider {
 
             String title = "";
             Element img = item.selectFirst("img");
-            if (img != null) {
-                title = img.attr("alt");
-            }
+            if (img != null) title = img.attr("alt");
             if (TextUtils.isEmpty(title)) {
                 Element parent = item.parent();
                 if (parent != null) {
@@ -242,12 +235,11 @@ public class WanMei extends Spider {
         Element h1 = doc.selectFirst("h1");
         if (h1 != null) vod.setVodName(h1.text().trim());
 
-        // 图片: 从meta og:image或页面找
+        // 图片
         String pic = "";
         Element ogImg = doc.selectFirst("meta[property=og:image]");
         if (ogImg != null) {
             pic = ogImg.attr("content");
-            // 修复 og:image 中可能包含的重复域名
             if (pic.contains(SITE_URL + "http")) {
                 pic = pic.replace(SITE_URL, "");
             }
@@ -261,46 +253,59 @@ public class WanMei extends Spider {
         }
         vod.setVodPic(fixUrl(pic));
 
-        // 信息
+        // 信息字段（用变量暂存，避免调用Vod getter）
+        String director = "";
+        String actor = "";
+        String typeName = "";
+        String area = "";
+        String year = "";
+
+        // 方式1: 从 .hl-info li 提取
         Elements infoItems = doc.select(".hl-info li, .info li");
         for (Element item : infoItems) {
             String text = item.text();
             if (text.contains("导演")) {
-                vod.setVodDirector(text.replace("导演：", "").replace("导演:", "").trim());
+                director = text.replace("导演：", "").replace("导演:", "").trim();
             } else if (text.contains("主演")) {
-                vod.setVodActor(text.replace("主演：", "").replace("主演:", "").trim());
+                actor = text.replace("主演：", "").replace("主演:", "").trim();
             } else if (text.contains("类型")) {
-                vod.setTypeName(text.replace("类型：", "").replace("类型:", "").trim());
+                typeName = text.replace("类型：", "").replace("类型:", "").trim();
             } else if (text.contains("地区")) {
-                vod.setVodArea(text.replace("地区：", "").replace("地区:", "").trim());
+                area = text.replace("地区：", "").replace("地区:", "").trim();
             } else if (text.contains("年份") || text.contains("年代")) {
-                vod.setVodYear(text.replace("年份：", "").replace("年份:", "").replace("年代：", "").trim());
+                year = text.replace("年份：", "").replace("年份:", "").replace("年代：", "").trim();
             }
         }
-        // 回退: 从span标签找
-        if (TextUtils.isEmpty(vod.getVodDirector())) {
+
+        // 方式2: 从 li 里的 a 标签提取（如果方式1没取到）
+        if (TextUtils.isEmpty(director) || TextUtils.isEmpty(actor)) {
             for (Element li : doc.select("li")) {
                 String text = li.text();
-                if (text.contains("导演")) {
+                if (text.contains("导演") && TextUtils.isEmpty(director)) {
                     Element a = li.selectFirst("a");
-                    if (a != null) vod.setVodDirector(a.text().trim());
+                    if (a != null) director = a.text().trim();
                 }
-                if (text.contains("主演")) {
-                    StringBuilder actors = new StringBuilder();
+                if (text.contains("主演") && TextUtils.isEmpty(actor)) {
+                    StringBuilder sb = new StringBuilder();
                     for (Element a : li.select("a")) {
-                        if (actors.length() > 0) actors.append(",");
-                        actors.append(a.text().trim());
+                        if (sb.length() > 0) sb.append(",");
+                        sb.append(a.text().trim());
                     }
-                    if (actors.length() > 0) vod.setVodActor(actors.toString());
+                    if (sb.length() > 0) actor = sb.toString();
                 }
             }
         }
+
+        vod.setVodDirector(director);
+        vod.setVodActor(actor);
+        vod.setTypeName(typeName);
+        vod.setVodArea(area);
+        vod.setVodYear(year);
 
         // 简介
         Element descEl = doc.selectFirst("meta[name=description]");
         if (descEl != null) {
             String desc = descEl.attr("content");
-            // 去掉"剧情："前缀
             if (desc.contains("剧情：")) {
                 desc = desc.substring(desc.indexOf("剧情：") + 3);
             }
@@ -311,7 +316,7 @@ public class WanMei extends Spider {
         List<String> playFroms = new ArrayList<>();
         List<String> playUrls = new ArrayList<>();
 
-        // 找tab名称 (播放源名称)
+        // 找tab名称
         Elements tabLinks = doc.select(".nav-urls a");
         List<String> tabNames = new ArrayList<>();
         for (Element tab : tabLinks) {
@@ -413,7 +418,6 @@ public class WanMei extends Spider {
         String html = fetch(url);
         Document doc = Jsoup.parse(html);
 
-        // 搜索页item结构: .media-content 在 .w-obj 或列表里
         Elements items = doc.select("a.media-content");
         for (Element item : items) {
             String href = fixUrl(item.attr("href"));
@@ -422,10 +426,7 @@ public class WanMei extends Spider {
 
             String title = "";
             Element img = item.selectFirst("img");
-            if (img != null) {
-                title = img.attr("alt");
-            }
-            // 回退: 旁边标题
+            if (img != null) title = img.attr("alt");
             if (TextUtils.isEmpty(title)) {
                 Element parent = item.parent();
                 if (parent != null) {
