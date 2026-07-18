@@ -32,8 +32,6 @@ jobs:
           cd jar
           DIR="$(pwd)"
           APK="$DIR/../app/build/outputs/apk/release/app-release-unsigned.apk"
-          WORK="$DIR/Smali_classes"
-          SPIDER="$DIR/spider.jar"
           OUT="$DIR/custom_spider.jar"
           MD5="$OUT.md5"
 
@@ -44,44 +42,16 @@ jobs:
           fi
 
           rm -f "$OUT" "$MD5"
-          rm -rf "$WORK" "$SPIDER"
 
-          echo "Decompiling APK..."
-          java -jar "$DIR/3rd/apktool_2.11.0.jar" d -f --only-main-classes "$APK" -o "$WORK"
+          echo "Extracting classes.dex from APK..."
+          unzip -j "$APK" classes.dex -d "$DIR/"
+          mv "$DIR/classes.dex" "$OUT"
 
-          echo "Preparing spider structure..."
-          mkdir -p "$SPIDER/smali/com/github/catvod"
-          # 不复制 apktool.yml，让 apktool 重新扫描所有 smali 文件
-
-          if [ -d "$WORK/smali/com/github/catvod/spider" ]; then
-            cp -r "$WORK/smali/com/github/catvod/spider" "$SPIDER/smali/com/github/catvod/"
-            echo "Spider classes copied"
-          fi
-
-          if [ -d "$WORK/smali/com/github/catvod/js" ]; then
-            cp -r "$WORK/smali/com/github/catvod/js" "$SPIDER/smali/com/github/catvod/"
-            echo "JS classes copied"
-          fi
-
-          echo "Repacking JAR..."
-          java -jar "$DIR/3rd/apktool_2.11.0.jar" b "$SPIDER" -c
-
-          # 修正：apktool 输出的是 apk 文件，不是 dex.jar
-          ls -la "$SPIDER/dist/"
-
-          # 从 dist 目录找到生成的文件并重命名
-          if [ -f "$SPIDER/dist/app-release-unsigned.apk" ]; then
-            mv "$SPIDER/dist/app-release-unsigned.apk" "$OUT"
-          elif [ -f "$SPIDER/dist/dex.jar" ]; then
-            mv "$SPIDER/dist/dex.jar" "$OUT"
-          else
-            echo "Available files in dist:"
-            ls -la "$SPIDER/dist/"
-            exit 1
-          fi
+          echo "=== Verifying JAR contents ==="
+          unzip -l "$OUT" | grep -i "YueGuang" || echo "No YueGuang in JAR"
+          unzip -l "$OUT" | grep -i "spider" | head -20
 
           md5sum "$OUT" | awk '{print $1}' > "$MD5"
-          rm -rf "$SPIDER" "$WORK"
 
           echo "Done!"
           ls -lh "$OUT"
