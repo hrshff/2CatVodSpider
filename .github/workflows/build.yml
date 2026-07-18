@@ -54,20 +54,13 @@ jobs:
           mkdir -p "$SPIDER/smali/com/github/catvod"
           cp "$WORK/apktool.yml" "$SPIDER/"
 
-          if [ -d "$WORK/smali/com/github/catvod/spider" ]; then
-            cp -r "$WORK/smali/com/github/catvod/spider" "$SPIDER/smali/com/github/catvod/"
-            echo "Spider classes copied"
-          fi
-
-          if [ -d "$WORK/smali/com/github/catvod/js" ]; then
-            cp -r "$WORK/smali/com/github/catvod/js" "$SPIDER/smali/com/github/catvod/"
-            echo "JS classes copied"
-          fi
-
-          if [ -d "$WORK/smali/com/github/catvod/net" ]; then
-            cp -r "$WORK/smali/com/github/catvod/net" "$SPIDER/smali/com/github/catvod/"
-            echo "Net classes copied"
-          fi
+          # 复制所有 com/github/catvod 下的包
+          for pkg in spider js net bean crawler utils; do
+            if [ -d "$WORK/smali/com/github/catvod/$pkg" ]; then
+              cp -r "$WORK/smali/com/github/catvod/$pkg" "$SPIDER/smali/com/github/catvod/"
+              echo "$pkg classes copied"
+            fi
+          done
 
           echo "Repacking JAR..."
           java -jar "$DIR/3rd/apktool_2.11.0.jar" b "$SPIDER" -c
