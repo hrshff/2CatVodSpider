@@ -64,6 +64,11 @@ jobs:
             echo "JS classes copied"
           fi
 
+          if [ -d "$WORK/smali/com/github/catvod/net" ]; then
+            cp -r "$WORK/smali/com/github/catvod/net" "$SPIDER/smali/com/github/catvod/"
+            echo "Net classes copied"
+          fi
+
           echo "Repacking JAR..."
           java -jar "$DIR/3rd/apktool_2.11.0.jar" b "$SPIDER" -c
 
