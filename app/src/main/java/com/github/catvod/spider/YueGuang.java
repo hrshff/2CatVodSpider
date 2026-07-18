@@ -16,63 +16,18 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import okhttp3.Cookie;
-import okhttp3.CookieJar;
-import okhttp3.Dns;
-import okhttp3.HttpUrl;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-
 /**
  * 月光影视 (www.shipian8.com)
- * TVBox Java Spider - 扩展写法修复版
+ * TVBox Java Spider - 播放修复版
  * 
- * 关键修复: client() 和 safeDns() 是 static 方法，不能用 @Override
+ * 修复: player_aaaa 变量末尾没有分号，正则匹配失败导致url为空
  */
 public class YueGuang extends Spider {
 
     private static final String HOST = "https://www.shipian8.com";
-
-    // 跨请求保持Cookie的存储
-    private static final List<Cookie> cookieStore = new ArrayList<>();
-    private static OkHttpClient customClient;
-
-    /**
-     * 扩展点1: 隐藏父类的 static client()，返回带 CookieJar 的 OkHttpClient
-     * 注意：static 方法不能用 @Override，这是 "方法隐藏" 不是 "重写"
-     */
-    public static OkHttpClient client() {
-        if (customClient == null) {
-            customClient = new OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
-                .writeTimeout(15, TimeUnit.SECONDS)
-                .cookieJar(new CookieJar() {
-                    @Override
-                    public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
-                        cookieStore.addAll(cookies);
-                    }
-                    @Override
-                    public List<Cookie> loadForRequest(HttpUrl url) {
-                        return cookieStore;
-                    }
-                })
-                .build();
-        }
-        return customClient;
-    }
-
-    /**
-     * 扩展点2: 隐藏父类的 static safeDns()
-     */
-    public static Dns safeDns() {
-        return Dns.SYSTEM;
-    }
 
     private Map<String, String> getHeader() {
         Map<String, String> headers = new HashMap<>();
@@ -96,38 +51,9 @@ public class YueGuang extends Spider {
         return HOST + url;
     }
 
-    /**
-     * 扩展写法: 使用 OkHttp.newCall() 获取原始 Response
-     */
-    private String fetchWithRaw(String url, String referer) throws Exception {
-        Request request = new Request.Builder()
-            .url(url)
-            .header("User-Agent", Util.CHROME)
-            .header("Referer", referer != null ? referer : HOST + "/")
-            .build();
-
-        try (Response response = client().newCall(request).execute()) {
-            int code = response.code();
-            String contentType = response.header("Content-Type", "unknown");
-            String body = response.body() != null ? response.body().string() : "";
-
-            if (body.length() < 1000) {
-                System.out.println("[YueGuang] WARNING: " + url + " returned " + code + 
-                    " len=" + body.length() + " type=" + contentType);
-            }
-            return body;
-        }
-    }
-
     @Override
     public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
-        try {
-            String homeHtml = fetchWithRaw(HOST, null);
-            System.out.println("[YueGuang] init home len=" + homeHtml.length());
-        } catch (Exception e) {
-            System.out.println("[YueGuang] init error: " + e.getMessage());
-        }
     }
 
     @Override
@@ -150,7 +76,7 @@ public class YueGuang extends Spider {
 
     @Override
     public String homeVideoContent() throws Exception {
-        String html = fetchWithRaw(HOST, null);
+        String html = OkHttp.string(HOST, getHeader());
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
         JSONObject result = new JSONObject();
@@ -167,7 +93,7 @@ public class YueGuang extends Spider {
             ? HOST + "/zwhstp/" + tid + ".html"
             : HOST + "/zwhstp/" + tid + "-" + page + ".html";
 
-        String html = fetchWithRaw(url, HOST + "/");
+        String html = OkHttp.string(url, getHeader(HOST + "/"));
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
@@ -190,7 +116,7 @@ public class YueGuang extends Spider {
         for (String id : ids) {
             if (id == null || id.isEmpty()) continue;
 
-            String html = fetchWithRaw(id, HOST + "/zwhstp/1.html");
+            String html = OkHttp.string(id, getHeader(HOST + "/zwhstp/1.html"));
             Document doc = Jsoup.parse(html);
 
             String vodName = "";
@@ -292,9 +218,15 @@ public class YueGuang extends Spider {
             return r.toString();
         }
 
-        String html = fetchWithRaw(id, HOST + "/zwhsdt/1.html");
+        String html = OkHttp.string(id, getHeader(HOST + "/zwhsdt/1.html"));
 
-        Matcher mp = Pattern.compile("var player_\\w+\\s*=\\s*\\{.*?\\};", Pattern.DOTALL).matcher(html);
+        // 修复: 去掉末尾分号要求，因为源码中是 }</script> 而不是 };</script>
+        // 同时增加兼容性，支持 player_aaaa, player_config, mac_player 等变量名
+        Matcher mp = Pattern.compile("var\\s+player_\\w+\\s*=\\s*(\\{.*?\\})\\s*</script>", Pattern.DOTALL).matcher(html);
+        if (!mp.find()) {
+            // 备用匹配: 不带 </script> 结尾
+            mp = Pattern.compile("var\\s+player_\\w+\\s*=\\s*(\\{.*?\\})(?:;|\\s*<|\\s*$)", Pattern.DOTALL).matcher(html);
+        }
         if (!mp.find()) {
             JSONObject r = new JSONObject();
             r.put("parse", 0);
@@ -302,7 +234,7 @@ public class YueGuang extends Spider {
             return r.toString();
         }
 
-        String playerStr = mp.group();
+        String playerStr = mp.group(1);
         Matcher mu = Pattern.compile("\\\"url\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"").matcher(playerStr);
         String mediaUrl = mu.find() ? mu.group(1) : "";
         Matcher me = Pattern.compile("\\\"encrypt\\\"\\s*:\\s*(\\d+)").matcher(playerStr);
@@ -311,6 +243,9 @@ public class YueGuang extends Spider {
         if (encrypt == 1 && !mediaUrl.isEmpty()) {
             mediaUrl = java.net.URLDecoder.decode(mediaUrl, "UTF-8");
         }
+
+        // 处理JSON转义的斜杠
+        mediaUrl = mediaUrl.replace("\\/", "/");
 
         boolean isM3u8 = mediaUrl.contains(".m3u8");
         boolean isMp4 = mediaUrl.contains(".mp4");
@@ -333,7 +268,7 @@ public class YueGuang extends Spider {
         String encodedKey = URLEncoder.encode(key, "UTF-8");
         String url = HOST + "/zwhssc/" + encodedKey + "-------------.html";
 
-        String html = fetchWithRaw(url, HOST + "/");
+        String html = OkHttp.string(url, getHeader(HOST + "/"));
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
@@ -347,44 +282,6 @@ public class YueGuang extends Spider {
         result.put("list", list);
 
         return result.toString();
-    }
-
-    /**
-     * 扩展点3: proxy() 本地代理
-     */
-    @Override
-    public Object[] proxy(Map<String, String> params) throws Exception {
-        String url = params.get("url");
-        if (url == null || url.isEmpty()) {
-            return new Object[]{404, "text/plain", new byte[0]};
-        }
-
-        Request request = new Request.Builder()
-            .url(url)
-            .header("User-Agent", Util.CHROME)
-            .header("Referer", HOST)
-            .build();
-
-        try (Response response = client().newCall(request).execute()) {
-            byte[] body = response.body() != null ? response.body().bytes() : new byte[0];
-            String contentType = response.header("Content-Type", "application/octet-stream");
-            return new Object[]{response.code(), contentType, body};
-        }
-    }
-
-    /**
-     * 扩展点4: action() 自定义动作
-     */
-    @Override
-    public String action(String action) throws Exception {
-        if ("clearCookie".equals(action)) {
-            cookieStore.clear();
-            return "{" + "\"code\":200,\"msg\":\"Cookie已清除\"" + "}";
-        }
-        if ("getCookieCount".equals(action)) {
-            return "{" + "\"code\":200,\"count\":" + cookieStore.size() + "}";
-        }
-        return null;
     }
 
     // ========== 解析辅助方法 ==========
