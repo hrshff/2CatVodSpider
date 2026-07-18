@@ -19,7 +19,7 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled = true
+            minifyEnabled false
             proguardFiles 'proguard-rules.pro'
         }
     }
@@ -44,6 +44,6 @@ dependencies {
     implementation libs.smbj
     implementation libs.jsoup
     implementation(libs.logger) {
-        exclude group: 'com.android.support', module: 'support-annotations'
+        exclude group: 'com.github.catvod', module: 'support-annotations'
     }
 }
