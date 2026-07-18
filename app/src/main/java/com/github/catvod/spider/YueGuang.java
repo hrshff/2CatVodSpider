@@ -11,7 +11,6 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import java.io.IOException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,28 +30,23 @@ import okhttp3.Response;
 
 /**
  * 月光影视 (www.shipian8.com)
- * TVBox Java Spider - 扩展写法版
+ * TVBox Java Spider - 扩展写法修复版
  * 
- * 扩展点1: 重写 Spider.client() 返回自定义 OkHttpClient（带CookieJar）
- * 扩展点2: 重写 Spider.safeDns() 返回自定义 DNS
- * 扩展点3: 使用 proxy() 本地代理中转请求
- * 扩展点4: 使用 action() 自定义动作
- * 扩展点5: 使用 OkHttp.newCall() 获取原始 Response（含Cookie）
+ * 关键修复: client() 和 safeDns() 是 static 方法，不能用 @Override
  */
 public class YueGuang extends Spider {
 
     private static final String HOST = "https://www.shipian8.com";
 
     // 跨请求保持Cookie的存储
-    private final List<Cookie> cookieStore = new ArrayList<>();
-    private OkHttpClient customClient;
+    private static final List<Cookie> cookieStore = new ArrayList<>();
+    private static OkHttpClient customClient;
 
     /**
-     * 扩展点1: 重写 client()，返回带 CookieJar 的 OkHttpClient
-     * TVBox 的 OkHttp.string() 内部会优先使用 Spider.client()
+     * 扩展点1: 隐藏父类的 static client()，返回带 CookieJar 的 OkHttpClient
+     * 注意：static 方法不能用 @Override，这是 "方法隐藏" 不是 "重写"
      */
-    @Override
-    public OkHttpClient client() {
+    public static OkHttpClient client() {
         if (customClient == null) {
             customClient = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
@@ -74,11 +68,10 @@ public class YueGuang extends Spider {
     }
 
     /**
-     * 扩展点2: 重写 safeDns()，返回自定义 DNS（如 DoH）
+     * 扩展点2: 隐藏父类的 static safeDns()
      */
-    @Override
-    public Dns safeDns() {
-        return Dns.SYSTEM; // 可替换为自定义DoH
+    public static Dns safeDns() {
+        return Dns.SYSTEM;
     }
 
     private Map<String, String> getHeader() {
@@ -105,7 +98,6 @@ public class YueGuang extends Spider {
 
     /**
      * 扩展写法: 使用 OkHttp.newCall() 获取原始 Response
-     * 可以拿到 Set-Cookie、状态码、完整响应头
      */
     private String fetchWithRaw(String url, String referer) throws Exception {
         Request request = new Request.Builder()
@@ -115,12 +107,10 @@ public class YueGuang extends Spider {
             .build();
 
         try (Response response = client().newCall(request).execute()) {
-            // 打印状态码和响应头，用于调试
             int code = response.code();
             String contentType = response.header("Content-Type", "unknown");
             String body = response.body() != null ? response.body().string() : "";
 
-            // 如果返回内容异常短，可能是拦截页
             if (body.length() < 1000) {
                 System.out.println("[YueGuang] WARNING: " + url + " returned " + code + 
                     " len=" + body.length() + " type=" + contentType);
@@ -132,7 +122,6 @@ public class YueGuang extends Spider {
     @Override
     public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
-        // 预热：先访问首页，让CookieJar保存Cookie
         try {
             String homeHtml = fetchWithRaw(HOST, null);
             System.out.println("[YueGuang] init home len=" + homeHtml.length());
@@ -362,7 +351,6 @@ public class YueGuang extends Spider {
 
     /**
      * 扩展点3: proxy() 本地代理
-     * 当播放器无法直接访问视频URL时，通过本地代理中转
      */
     @Override
     public Object[] proxy(Map<String, String> params) throws Exception {
@@ -386,7 +374,6 @@ public class YueGuang extends Spider {
 
     /**
      * 扩展点4: action() 自定义动作
-     * TVBox可以通过 action 调用Spider的自定义方法
      */
     @Override
     public String action(String action) throws Exception {
