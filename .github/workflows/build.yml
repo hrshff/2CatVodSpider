@@ -25,6 +25,7 @@ jobs:
       - name: Build APK
         run: |
           chmod +x gradlew
+          ./gradlew clean
           ./gradlew assembleRelease
 
       - name: Generate JAR
@@ -48,6 +49,11 @@ jobs:
 
           echo "Decompiling APK..."
           java -jar "$DIR/3rd/apktool_2.11.0.jar" d -f --only-main-classes "$APK" -o "$WORK"
+
+          echo "=== APK classes.dex size ==="
+          ls -la "$WORK/smali/" | head -20
+          echo "=== Spider smali files ==="
+          find "$WORK/smali/com/github/catvod/spider" -name "*.smali" 2>/dev/null | sort || echo "No spider smali found"
 
           echo "Preparing spider structure..."
           mkdir -p "$SPIDER/smali/com/github/catvod"
@@ -86,22 +92,10 @@ jobs:
           echo "Done!"
           ls -lh "$OUT"
 
-      - name: Check compiled classes
-        run: |
-          echo "=== Compiled class files (javac output) ==="
-          find app/build/intermediates/javac/release -name "*.class" | grep -i spider | sort || true
-          echo "=== YueGuang.class ==="
-          find app/build/intermediates/javac/release -name "YueGuang.class" 2>/dev/null || echo "NOT FOUND after javac"
-          echo "=== After R8 ==="
-          find app/build/intermediates/minified_r8/release -name "YueGuang.class" 2>/dev/null || echo "NOT FOUND after R8"
-
       - name: Check JAR
         run: |
           ls -lh jar/custom_spider.jar
-          echo "=== JAR contents (spider) ==="
-          unzip -l jar/custom_spider.jar | grep -i "spider" || true
-          echo "=== Looking for YueGuang ==="
-          unzip -l jar/custom_spider.jar | grep -i "YueGuang" || echo "No YueGuang found"
+          unzip -l jar/custom_spider.jar | grep "YueGuang" || echo "No YueGuang found"
 
       - name: Commit and Push JAR to repo
         run: |
