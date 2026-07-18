@@ -22,10 +22,6 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * 樱花动漫 (www.yinhuadm.cc)
- * TVBox Java Spider - FongMi 规范版
- */
 public class YingHua extends Spider {
 
     private static final String SITE_URL = "https://www.yinhuadm.cc";
@@ -51,9 +47,9 @@ public class YingHua extends Spider {
 
     private String extractId(String url) {
         if (TextUtils.isEmpty(url)) return "";
-        Matcher m = Pattern.compile("/v/(\d+)\.html").matcher(url);
+        Matcher m = Pattern.compile("/v/(\\d+)\\.html").matcher(url);
         if (m.find()) return m.group(1);
-        m = Pattern.compile("/v/(\d+)-").matcher(url);
+        m = Pattern.compile("/v/(\\d+)-").matcher(url);
         if (m.find()) return m.group(1);
         return "";
     }
@@ -81,7 +77,6 @@ public class YingHua extends Spider {
         String html = fetch(SITE_URL + "/");
         Document doc = Jsoup.parse(html);
 
-        // ========== 轮播图 ==========
         Elements slides = doc.select(".swiper-big .swiper-slide");
         for (Element slide : slides) {
             Element link = slide.selectFirst("a.banner");
@@ -98,7 +93,7 @@ public class YingHua extends Spider {
             String pic = "";
             String style = link.attr("style");
             if (!TextUtils.isEmpty(style)) {
-                Matcher m = Pattern.compile("url\((.*?)\)").matcher(style);
+                Matcher m = Pattern.compile("url\\((.*?)\\)").matcher(style);
                 if (m.find()) {
                     pic = m.group(1).trim();
                     if ((pic.startsWith("\"") && pic.endsWith("\"")) ||
@@ -123,7 +118,6 @@ public class YingHua extends Spider {
             list.add(vod);
         }
 
-        // ========== 影片列表 ==========
         Elements items = doc.select(".module-poster-item.module-item");
         for (Element item : items) {
             String href = fixUrl(item.attr("href"));
@@ -202,7 +196,6 @@ public class YingHua extends Spider {
             list.add(vod);
         }
 
-        // 分页判断：用 page-link 而不是 module-paper-item
         boolean hasNext = doc.select(".page-link").size() > 1 || list.size() >= 24;
         int pageCount = hasNext ? page + 1 : page;
         int total = list.size() > 0 ? page * 24 + 1 : 0;
@@ -296,13 +289,12 @@ public class YingHua extends Spider {
         String playUrl = id.startsWith("http") ? id : fixUrl(id);
         String html = fetch(playUrl);
 
-        // 尝试提取 player_aaaa
         String playerJson = "";
-        Matcher m = Pattern.compile("var player_aaaa\s*=\s*(\{.*?\});", Pattern.DOTALL).matcher(html);
+        Matcher m = Pattern.compile("var player_aaaa\\s*=\\s*(\\{.*?\\});", Pattern.DOTALL).matcher(html);
         if (m.find()) {
             playerJson = m.group(1);
         } else {
-            m = Pattern.compile("var player_\w+\s*=\s*(\{.*?\});", Pattern.DOTALL).matcher(html);
+            m = Pattern.compile("var player_\\w+\\s*=\\s*(\\{.*?\\});", Pattern.DOTALL).matcher(html);
             if (m.find()) playerJson = m.group(1);
         }
 
@@ -325,26 +317,22 @@ public class YingHua extends Spider {
 
                 url = fixUrl(url);
 
-                // 只有提取到直链时才返回 parse:0
                 boolean isM3u8 = url.contains(".m3u8");
                 boolean isMp4 = url.contains(".mp4");
                 if (isM3u8 || isMp4) {
                     return Result.get().url(url).parse(0).header(header).string();
                 }
-                // 非直链：回退到播放页解析
             } catch (Exception e) {
-                // 回退到播放页解析
+                // ignore
             }
         }
 
-        // iframe 回退
         Element iframe = Jsoup.parse(html).selectFirst("iframe");
         if (iframe != null) {
             String src = fixUrl(iframe.attr("src"));
             return Result.get().url(src).parse(1).header(header).string();
         }
 
-        // 最终回退：返回原始播放页让 webview 解析
         return Result.get().url(playUrl).parse(1).header(header).string();
     }
 
@@ -364,30 +352,25 @@ public class YingHua extends Spider {
         }
 
         String encodedKey = URLEncoder.encode(key, "UTF-8");
-        // 搜索URL: /vch/{wd}.html (从form onsubmit确认)
         String url = SITE_URL + "/vch/" + encodedKey + ".html";
 
         String html = fetch(url);
         Document doc = Jsoup.parse(html);
 
-        // 搜索结果用卡片式布局 module-card-item
         Elements items = doc.select(".module-card-item.module-item");
         if (items.isEmpty()) {
             items = doc.select(".module-card-item");
         }
 
         for (Element item : items) {
-            // 标题: .module-card-item-title a strong
             String title = "";
             Element titleEl = item.selectFirst(".module-card-item-title a strong");
             if (titleEl != null) title = titleEl.text().trim();
             if (TextUtils.isEmpty(title)) {
-                // 回退: 从 a 的 title 属性
                 Element link = item.selectFirst("a");
                 if (link != null) title = link.attr("title");
             }
 
-            // ID和链接
             Element link = item.selectFirst("a[href^=/v/]");
             if (link == null) link = item.selectFirst("a");
             if (link == null) continue;
@@ -396,14 +379,12 @@ public class YingHua extends Spider {
             String id = extractId(href);
             if (TextUtils.isEmpty(id) || TextUtils.isEmpty(title)) continue;
 
-            // 图片: .module-card-item-poster img 的 data-original
             String pic = "";
             Element img = item.selectFirst(".module-card-item-poster img");
             if (img != null) {
                 pic = img.attr("data-original");
                 if (TextUtils.isEmpty(pic)) pic = img.attr("src");
             }
-            // 回退: 在item里任意找img
             if (TextUtils.isEmpty(pic)) {
                 img = item.selectFirst("img");
                 if (img != null) {
@@ -412,7 +393,6 @@ public class YingHua extends Spider {
                 }
             }
 
-            // 状态: .module-item-note
             String status = "";
             Element note = item.selectFirst(".module-item-note");
             if (note != null) status = note.text().trim();
@@ -429,7 +409,6 @@ public class YingHua extends Spider {
             list.add(vod);
         }
 
-        // 搜索页分页判断: 搜索页没有标准分页class，用结果数判断
         boolean hasNext = list.size() >= 24;
         int pageCount = hasNext ? page + 1 : page;
         int total = list.isEmpty() ? 0 : list.size();
