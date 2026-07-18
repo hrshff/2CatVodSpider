@@ -32,7 +32,7 @@ public class WanMei extends Spider {
 
     private HashMap<String, String> getHeaders() {
         HashMap<String, String> headers = new HashMap<>();
-        headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 15; 2407FRK8EC Build/AP3A.240617.008; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0.6613.127 Mobile Safari/537.36");
+        headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         headers.put("Referer", SITE_URL + "/");
         return headers;
     }
@@ -253,13 +253,14 @@ public class WanMei extends Spider {
         }
         vod.setVodPic(fixUrl(pic));
 
-        // 信息字段
+        // 信息字段（用变量暂存，避免调用Vod getter）
         String director = "";
         String actor = "";
         String typeName = "";
         String area = "";
         String year = "";
 
+        // 方式1: 从 .hl-info li 提取
         Elements infoItems = doc.select(".hl-info li, .info li");
         for (Element item : infoItems) {
             String text = item.text();
@@ -276,6 +277,7 @@ public class WanMei extends Spider {
             }
         }
 
+        // 方式2: 从 li 里的 a 标签提取（如果方式1没取到）
         if (TextUtils.isEmpty(director) || TextUtils.isEmpty(actor)) {
             for (Element li : doc.select("li")) {
                 String text = li.text();
@@ -314,6 +316,7 @@ public class WanMei extends Spider {
         List<String> playFroms = new ArrayList<>();
         List<String> playUrls = new ArrayList<>();
 
+        // 找tab名称
         Elements tabLinks = doc.select(".nav-urls a");
         List<String> tabNames = new ArrayList<>();
         for (Element tab : tabLinks) {
@@ -323,6 +326,7 @@ public class WanMei extends Spider {
             }
         }
 
+        // 找播放列表
         Elements playlists = doc.select(".v-playurl .hl-plays-list");
         if (playlists.isEmpty()) {
             playlists = doc.select(".hl-plays-list");
@@ -371,11 +375,6 @@ public class WanMei extends Spider {
         HashMap<String, String> header = getHeaders();
         header.put("Origin", SITE_URL);
         header.put("Referer", playUrl);
-
-        // YZ节点(yzzy)有防盗链，必须走播放页webview解析
-        if (flag.contains("YZ") || flag.contains("yz")) {
-            return Result.get().url(playUrl).parse(1).header(header).string();
-        }
 
         if (!TextUtils.isEmpty(url)) {
             boolean isM3u8 = url.contains(".m3u8");
