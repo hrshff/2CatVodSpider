@@ -1,6 +1,9 @@
 # Merge
 -flattenpackagehierarchy com.github.catvod.spider.merge
 
+# 禁用 tree shaking，防止 R8 删除未被引用的 Spider 类
+-dontshrink
+
 # dontwarn
 -dontwarn org.slf4j.**
 -dontwarn org.xmlpull.v1.**
