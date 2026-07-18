@@ -30,33 +30,17 @@ import okhttp3.Response;
 
 /**
  * 月光影视 (www.shipian8.com)
- * TVBox Java Spider - 扩展写法最终版
+ * TVBox Java Spider - 播放诊断版
  * 
- * 扩展点:
- * 1. 隐藏父类 static client()，返回带 CookieJar 的 OkHttpClient
- * 2. 隐藏父类 static safeDns()，返回自定义 DNS
- * 3. proxy() 本地代理中转
- * 4. action() 自定义动作
- * 
- * 修复:
- * - static 方法不能用 @Override
- * - 播放页正则去掉分号要求
- * - 处理JSON转义斜杠 \/
- * - 删除init预热避免频率限制
- * - 增加拦截检测和首页兜底
+ * 在playerContent中增加详细调试输出，确认播放页返回内容
  */
 public class YueGuang extends Spider {
 
     private static final String HOST = "https://www.shipian8.com";
 
-    // 跨请求保持Cookie的存储
     private static final List<Cookie> cookieStore = new ArrayList<>();
     private static OkHttpClient customClient;
 
-    /**
-     * 扩展点1: 隐藏父类的 static client()，返回带 CookieJar 的 OkHttpClient
-     * 注意：static 方法不能用 @Override，这是 "方法隐藏"
-     */
     public static OkHttpClient client() {
         if (customClient == null) {
             customClient = new OkHttpClient.Builder()
@@ -78,9 +62,6 @@ public class YueGuang extends Spider {
         return customClient;
     }
 
-    /**
-     * 扩展点2: 隐藏父类的 static safeDns()
-     */
     public static Dns safeDns() {
         return Dns.SYSTEM;
     }
@@ -107,17 +88,11 @@ public class YueGuang extends Spider {
         return HOST + url;
     }
 
-    /**
-     * 检查返回内容是否有效（不是拦截页）
-     */
     private boolean isValidHtml(String html) {
         if (html == null || html.length() < 5000) return false;
-        return html.contains("stui-vodlist") || html.contains("vodlist") || html.contains("class=\"stui-");
+        return html.contains("stui-vodlist") || html.contains("vodlist") || html.contains("class=\"stui-") || html.contains("player_");
     }
 
-    /**
-     * 使用自定义 client 发起请求（带 CookieJar）
-     */
     private String fetchWithClient(String url, String referer) throws Exception {
         Request request = new Request.Builder()
             .url(url)
@@ -134,7 +109,6 @@ public class YueGuang extends Spider {
     @Override
     public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
-        // 不预热，避免触发请求频率限制
     }
 
     @Override
@@ -176,9 +150,7 @@ public class YueGuang extends Spider {
 
         String html = fetchWithClient(url, HOST + "/");
 
-        // 检查是否被拦截
         if (!isValidHtml(html)) {
-            // 被拦截了，尝试从首页获取数据兜底
             String homeHtml = fetchWithClient(HOST, null);
             if (isValidHtml(homeHtml)) {
                 Document homeDoc = Jsoup.parse(homeHtml);
@@ -317,23 +289,38 @@ public class YueGuang extends Spider {
             return r.toString();
         }
 
+        // 诊断：打印请求信息
+        System.out.println("[YueGuang-DEBUG] playerContent start, id=" + id + ", flag=" + flag);
+
         String html = fetchWithClient(id, HOST + "/zwhsdt/1.html");
+
+        // 诊断：打印返回内容长度和前200字符
+        String preview = html != null ? (html.length() > 200 ? html.substring(0, 200) : html) : "null";
+        System.out.println("[YueGuang-DEBUG] playerContent html len=" + (html != null ? html.length() : 0) + " preview=" + preview.replace("\n", " "));
 
         // 检查是否被拦截
         if (!isValidHtml(html)) {
+            System.out.println("[YueGuang-DEBUG] playerContent INVALID html, returning empty");
             JSONObject r = new JSONObject();
             r.put("parse", 0);
             r.put("url", "");
             return r.toString();
         }
 
-        // 修复: 去掉末尾分号要求，匹配 </script>
+        // 尝试匹配 player_aaaa
         Matcher mp = Pattern.compile("var\\s+player_\\w+\\s*=\\s*(\\{.*?\\})\\s*</script>", Pattern.DOTALL).matcher(html);
-        if (!mp.find()) {
+        boolean found = mp.find();
+        System.out.println("[YueGuang-DEBUG] playerContent primary regex found=" + found);
+
+        if (!found) {
             // 备用匹配
             mp = Pattern.compile("var\\s+player_\\w+\\s*=\\s*(\\{.*?\\})(?:;|\\s*<|\\s*$)", Pattern.DOTALL).matcher(html);
+            found = mp.find();
+            System.out.println("[YueGuang-DEBUG] playerContent fallback regex found=" + found);
         }
-        if (!mp.find()) {
+
+        if (!found) {
+            System.out.println("[YueGuang-DEBUG] playerContent NO MATCH, returning empty");
             JSONObject r = new JSONObject();
             r.put("parse", 0);
             r.put("url", "");
@@ -341,10 +328,14 @@ public class YueGuang extends Spider {
         }
 
         String playerStr = mp.group(1);
+        System.out.println("[YueGuang-DEBUG] playerContent matched=" + playerStr.substring(0, Math.min(200, playerStr.length())));
+
         Matcher mu = Pattern.compile("\\\"url\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"").matcher(playerStr);
         String mediaUrl = mu.find() ? mu.group(1) : "";
         Matcher me = Pattern.compile("\\\"encrypt\\\"\\s*:\\s*(\\d+)").matcher(playerStr);
         int encrypt = me.find() ? Integer.parseInt(me.group(1)) : 0;
+
+        System.out.println("[YueGuang-DEBUG] playerContent raw url=" + mediaUrl + ", encrypt=" + encrypt);
 
         if (encrypt == 1 && !mediaUrl.isEmpty()) {
             mediaUrl = java.net.URLDecoder.decode(mediaUrl, "UTF-8");
@@ -352,6 +343,8 @@ public class YueGuang extends Spider {
 
         // 处理JSON转义斜杠
         mediaUrl = mediaUrl.replace("\\/", "/");
+
+        System.out.println("[YueGuang-DEBUG] playerContent final url=" + mediaUrl);
 
         boolean isM3u8 = mediaUrl.contains(".m3u8");
         boolean isMp4 = mediaUrl.contains(".mp4");
@@ -390,9 +383,6 @@ public class YueGuang extends Spider {
         return result.toString();
     }
 
-    /**
-     * 扩展点3: proxy() 本地代理
-     */
     @Override
     public Object[] proxy(Map<String, String> params) throws Exception {
         String url = params.get("url");
@@ -413,9 +403,6 @@ public class YueGuang extends Spider {
         }
     }
 
-    /**
-     * 扩展点4: action() 自定义动作
-     */
     @Override
     public String action(String action) throws Exception {
         if ("clearCookie".equals(action)) {
@@ -428,20 +415,13 @@ public class YueGuang extends Spider {
         return null;
     }
 
-    // ========== 解析辅助方法（多选择器兼容）==========
-
     private JSONArray parseVodList(Document doc) throws Exception {
         JSONArray list = new JSONArray();
-
-        // 主选择器
         Elements items = doc.select(".stui-vodlist__thumb");
 
-        // 备用1: 通用MacCMS
         if (items.isEmpty()) {
             items = doc.select(".fed-list-pics, .myui-vodlist__thumb, .module-poster-item");
         }
-
-        // 备用2: 更通用的a标签
         if (items.isEmpty()) {
             items = doc.select("a[href*=/zwhsdt/]");
         }
