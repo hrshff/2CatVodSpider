@@ -3,6 +3,7 @@ package com.github.catvod.spider;
 import android.content.Context;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
+import com.github.catvod.utils.Util;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
@@ -14,35 +15,35 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * 月光影视 (www.shipian8.com)
- * TVBox Java Spider - 诊断版
+ * 基于 CatVodSpider 官方规范编写
  * 
- * 把服务器返回内容直接显示在TVBox中，帮助诊断反爬虫问题
+ * 参考: Bili.java, PTT.java, YHDM.java
  */
 public class YueGuang extends Spider {
 
     private static final String HOST = "https://www.shipian8.com";
-    private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-    private HashMap<String, String> getHeaders(String referer) {
-        HashMap<String, String> headers = new HashMap<>();
-        headers.put("User-Agent", UA);
-        headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
-        headers.put("Accept-Language", "zh-CN,zh;q=0.9");
-        headers.put("Connection", "keep-alive");
-        headers.put("Upgrade-Insecure-Requests", "1");
+    /**
+     * 获取请求头 - 参考官方 Spider 写法，极简
+     */
+    private Map<String, String> getHeader() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("User-Agent", Util.CHROME);
+        return headers;
+    }
+
+    private Map<String, String> getHeader(String referer) {
+        Map<String, String> headers = getHeader();
         if (referer != null && !referer.isEmpty()) {
             headers.put("Referer", referer);
         }
         return headers;
-    }
-
-    private String fetch(String url, String referer) throws Exception {
-        return OkHttp.string(url, getHeaders(referer));
     }
 
     private String abs(String url) {
@@ -51,17 +52,6 @@ public class YueGuang extends Spider {
         if (url.startsWith("http://") || url.startsWith("https://")) return url;
         if (url.startsWith("//")) return "https:" + url;
         return HOST + url;
-    }
-
-    // 创建诊断条目，显示服务器返回的内容
-    private JSONObject makeDebugItem(String title, String preview) throws Exception {
-        JSONObject vod = new JSONObject();
-        vod.put("vod_id", HOST);
-        vod.put("vod_name", title);
-        vod.put("vod_pic", "");
-        vod.put("vod_remarks", preview.length() > 50 ? preview.substring(0, 50) : preview);
-        vod.put("vod_content", preview);
-        return vod;
     }
 
     @Override
@@ -89,17 +79,9 @@ public class YueGuang extends Spider {
 
     @Override
     public String homeVideoContent() throws Exception {
-        String html = fetch(HOST, null);
-        String preview = html != null && html.length() > 200 ? html.substring(0, 200) : (html != null ? html : "null");
-
-        Document doc = Jsoup.parse(html != null ? html : "");
+        String html = OkHttp.string(HOST, getHeader());
+        Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
-
-        // 如果首页也解析不到，显示诊断信息
-        if (list.length() == 0) {
-            list.put(makeDebugItem("首页诊断", "首页返回长度=" + (html != null ? html.length() : 0) + " 前100字=" + preview.substring(0, Math.min(100, preview.length()))));
-        }
-
         JSONObject result = new JSONObject();
         result.put("list", list);
         return result.toString();
@@ -114,27 +96,11 @@ public class YueGuang extends Spider {
             ? HOST + "/zwhstp/" + tid + ".html"
             : HOST + "/zwhstp/" + tid + "-" + page + ".html";
 
-        String html = fetch(url, HOST + "/");
-        String preview = html != null && html.length() > 300 ? html.substring(0, 300) : (html != null ? html : "null");
-
-        Document doc = Jsoup.parse(html != null ? html : "");
+        String html = OkHttp.string(url, getHeader(HOST + "/"));
+        Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
-        // 如果分类页为空，尝试从首页提取
-        if (list.length() == 0) {
-            String homeHtml = fetch(HOST, null);
-            Document homeDoc = Jsoup.parse(homeHtml != null ? homeHtml : "");
-            list = parseVodList(homeDoc);
-        }
-
-        // 如果还是空，显示诊断信息
-        if (list.length() == 0) {
-            String info = "分类页返回长度=" + (html != null ? html.length() : 0) + " 前150字=" + preview.substring(0, Math.min(150, preview.length()));
-            list.put(makeDebugItem("分类页诊断", info));
-        }
-
         boolean hasNext = doc.select(".stui-page, .page").size() > 0;
-        if (list.length() == 0) hasNext = false;
 
         JSONObject result = new JSONObject();
         result.put("page", page);
@@ -153,8 +119,8 @@ public class YueGuang extends Spider {
         for (String id : ids) {
             if (id == null || id.isEmpty()) continue;
 
-            String html = fetch(id, HOST + "/zwhstp/1.html");
-            Document doc = Jsoup.parse(html != null ? html : "");
+            String html = OkHttp.string(id, getHeader(HOST + "/zwhstp/1.html"));
+            Document doc = Jsoup.parse(html);
 
             String vodName = "";
             Element h1 = doc.selectFirst("h1.title");
@@ -255,9 +221,9 @@ public class YueGuang extends Spider {
             return r.toString();
         }
 
-        String html = fetch(id, HOST + "/zwhsdt/1.html");
+        String html = OkHttp.string(id, getHeader(HOST + "/zwhsdt/1.html"));
 
-        Matcher mp = Pattern.compile("var player_\\w+\\s*=\\s*\\{.*?\\};", Pattern.DOTALL).matcher(html != null ? html : "");
+        Matcher mp = Pattern.compile("var player_\\w+\\s*=\\s*\\{.*?\\};", Pattern.DOTALL).matcher(html);
         if (!mp.find()) {
             JSONObject r = new JSONObject();
             r.put("parse", 0);
@@ -284,7 +250,7 @@ public class YueGuang extends Spider {
         result.put("url", mediaUrl);
 
         HashMap<String, String> header = new HashMap<>();
-        header.put("User-Agent", UA);
+        header.put("User-Agent", Util.CHROME);
         header.put("Referer", id);
         result.put("header", new JSONObject(header).toString());
 
@@ -296,15 +262,9 @@ public class YueGuang extends Spider {
         String encodedKey = URLEncoder.encode(key, "UTF-8");
         String url = HOST + "/zwhssc/" + encodedKey + "-------------.html";
 
-        String html = fetch(url, HOST + "/");
-        Document doc = Jsoup.parse(html != null ? html : "");
+        String html = OkHttp.string(url, getHeader(HOST + "/"));
+        Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
-
-        if (list.length() == 0) {
-            String preview = html != null && html.length() > 200 ? html.substring(0, 200) : (html != null ? html : "null");
-            String info = "搜索页返回长度=" + (html != null ? html.length() : 0) + " 前100字=" + preview.substring(0, Math.min(100, preview.length()));
-            list.put(makeDebugItem("搜索诊断", info));
-        }
 
         boolean hasNext = doc.select(".stui-page, .page").size() > 0;
 
@@ -318,37 +278,18 @@ public class YueGuang extends Spider {
         return result.toString();
     }
 
-    // ========== 解析辅助方法（多选择器兼容）==========
+    // ========== 解析辅助方法 ==========
 
     private JSONArray parseVodList(Document doc) throws Exception {
         JSONArray list = new JSONArray();
-
-        // 主选择器
         Elements items = doc.select(".stui-vodlist__thumb");
-
-        // 备用1
-        if (items.isEmpty()) {
-            items = doc.select(".fed-list-pics, .myui-vodlist__thumb, .module-poster-item");
-        }
-
-        // 备用2：通用a标签
-        if (items.isEmpty()) {
-            items = doc.select("a[href*=/zwhsdt/]");
-        }
 
         for (Element item : items) {
             String href = item.attr("href");
             String title = item.attr("title");
             String img = item.attr("data-original");
             if (img.isEmpty()) img = item.attr("data-src");
-            if (img.isEmpty()) {
-                Element imgEl = item.selectFirst("img");
-                if (imgEl != null) {
-                    img = imgEl.attr("data-original");
-                    if (img.isEmpty()) img = imgEl.attr("src");
-                }
-            }
-            Element noteEl = item.selectFirst(".pic-text, .fed-list-remarks, .module-item-note");
+            Element noteEl = item.selectFirst(".pic-text");
             String note = noteEl != null ? noteEl.text().trim() : "";
 
             if (href.isEmpty() || title.isEmpty()) continue;
