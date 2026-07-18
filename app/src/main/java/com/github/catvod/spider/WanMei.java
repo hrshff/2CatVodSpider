@@ -253,14 +253,13 @@ public class WanMei extends Spider {
         }
         vod.setVodPic(fixUrl(pic));
 
-        // 信息字段（用变量暂存，避免调用Vod getter）
+        // 信息字段
         String director = "";
         String actor = "";
         String typeName = "";
         String area = "";
         String year = "";
 
-        // 方式1: 从 .hl-info li 提取
         Elements infoItems = doc.select(".hl-info li, .info li");
         for (Element item : infoItems) {
             String text = item.text();
@@ -277,7 +276,6 @@ public class WanMei extends Spider {
             }
         }
 
-        // 方式2: 从 li 里的 a 标签提取（如果方式1没取到）
         if (TextUtils.isEmpty(director) || TextUtils.isEmpty(actor)) {
             for (Element li : doc.select("li")) {
                 String text = li.text();
@@ -316,7 +314,6 @@ public class WanMei extends Spider {
         List<String> playFroms = new ArrayList<>();
         List<String> playUrls = new ArrayList<>();
 
-        // 找tab名称
         Elements tabLinks = doc.select(".nav-urls a");
         List<String> tabNames = new ArrayList<>();
         for (Element tab : tabLinks) {
@@ -326,7 +323,6 @@ public class WanMei extends Spider {
             }
         }
 
-        // 找播放列表
         Elements playlists = doc.select(".v-playurl .hl-plays-list");
         if (playlists.isEmpty()) {
             playlists = doc.select(".hl-plays-list");
@@ -380,6 +376,11 @@ public class WanMei extends Spider {
             boolean isM3u8 = url.contains(".m3u8");
             boolean isMp4 = url.contains(".mp4");
             if (isM3u8 || isMp4) {
+                // YZ节点(yzzy)有防盗链，走webview解析
+                if (flag.contains("YZ") || flag.contains("yz")) {
+                    return Result.get().url(url).parse(1).header(header).string();
+                }
+                // 其他节点走直链
                 return Result.get().url(url).parse(0).header(header).string();
             }
         }
