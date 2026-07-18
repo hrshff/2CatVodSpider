@@ -30,9 +30,10 @@ public class YueGuang extends Spider {
 
     private static final String SITE_URL = "https://www.shipian8.com";
 
+    // 月光影视需要桌面UA才能返回正常HTML
     private HashMap<String, String> getHeaders() {
         HashMap<String, String> headers = new HashMap<>();
-        headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 15; 2407FRK8EC Build/AP3A.240617.008; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0.6613.127 Mobile Safari/537.36");
+        headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         headers.put("Referer", SITE_URL + "/");
         return headers;
     }
@@ -155,7 +156,6 @@ public class YueGuang extends Spider {
             page = 1;
         }
 
-        // 月光影视分类页：/zwhstp/{tid}.html，分页：/zwhstp/{tid}-{page}.html
         String url;
         if (page == 1) {
             url = SITE_URL + "/zwhstp/" + tid + ".html";
