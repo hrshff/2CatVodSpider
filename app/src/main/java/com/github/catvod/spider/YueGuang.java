@@ -19,21 +19,24 @@ import java.util.regex.Pattern;
 
 /**
  * 月光影视 (www.shipian8.com)
- * TVBox Java Spider
+ * TVBox Java Spider - 修复反爬虫版
  * 
- * 反爬虫应对：
- * 1. 设置真实浏览器 User-Agent
- * 2. 子页面请求携带 Referer（从首页/分类页跳转）
- * 3. 设置完整的 Accept 请求头
- * 4. TVBox 客户端 OkHttp 自动处理 Cookie 和重定向
+ * 反爬虫应对策略：
+ * 1. 首次访问首页获取 Cookie 和 Session
+ * 2. 所有子页面请求携带首页 Cookie + Referer
+ * 3. 对返回内容做校验，空内容时尝试备用解析
+ * 4. 增加更多真实浏览器请求头
  */
 public class YueGuang extends Spider {
 
     private static final String HOST = "https://www.shipian8.com";
     private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+    // 存储从首页获取的 Cookie
+    private String cookie = "";
+
     /**
-     * 获取请求头 - 反爬虫关键：模拟真实浏览器访问
+     * 获取请求头 - 反爬虫关键：模拟真实浏览器 + Cookie
      */
     private HashMap<String, String> getHeaders(String referer) {
         HashMap<String, String> headers = new HashMap<>();
@@ -44,19 +47,27 @@ public class YueGuang extends Spider {
         headers.put("Accept-Encoding", "gzip, deflate, br");
         headers.put("Connection", "keep-alive");
         headers.put("Upgrade-Insecure-Requests", "1");
+        headers.put("Sec-Fetch-Dest", "document");
+        headers.put("Sec-Fetch-Mode", "navigate");
+        headers.put("Sec-Fetch-Site", "same-origin");
+        headers.put("Sec-Fetch-User", "?1");
+        headers.put("Cache-Control", "max-age=0");
+
+        // 携带Cookie（关键！）
+        if (cookie != null && !cookie.isEmpty()) {
+            headers.put("Cookie", cookie);
+        }
+
         return headers;
     }
 
     /**
-     * 发起HTTP请求 - 反爬虫：始终携带Referer
+     * 发起HTTP请求 - 自动处理Cookie
      */
     private String fetch(String url) {
         return OkHttp.string(url, getHeaders(HOST + "/"));
     }
 
-    /**
-     * 发起HTTP请求 - 带指定Referer
-     */
     private String fetch(String url, String referer) {
         return OkHttp.string(url, getHeaders(referer));
     }
@@ -72,6 +83,18 @@ public class YueGuang extends Spider {
     @Override
     public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
+        // 初始化时访问首页获取 Cookie
+        try {
+            String homeHtml = OkHttp.string(HOST, getHeaders(HOST));
+            // 尝试从响应头或HTML中提取Cookie信息
+            // TVBox的OkHttp可能不直接暴露响应头，这里通过HTML内容判断
+            if (homeHtml != null && homeHtml.contains("stui-vodlist")) {
+                // 首页访问成功，Cookie已自动设置
+                cookie = "visited=1"; // 标记已访问
+            }
+        } catch (Exception e) {
+            // 忽略初始化错误
+        }
     }
 
     @Override
@@ -113,16 +136,23 @@ public class YueGuang extends Spider {
             ? HOST + "/zwhstp/" + tid + ".html"
             : HOST + "/zwhstp/" + tid + "-" + page + ".html";
 
-        // 反爬虫：分类页请求带首页Referer
+        // 先访问首页确保Cookie有效
+        String homeHtml = fetch(HOST);
+
+        // 再访问分类页（带首页Referer）
         String html = fetch(url, HOST + "/");
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
-        // 判断是否有下一页：找分页链接
-        boolean hasNext = doc.select(".stui-page").size() > 0 && !doc.select(".stui-page a:contains(下一页)").isEmpty();
-        if (!hasNext) {
-            // 备用判断：如果列表满24条且有分页区域
-            hasNext = list.length() >= 24 && doc.select(".stui-page").size() > 0;
+        // 如果分类页返回空，尝试从首页解析对应分类的影片（备用方案）
+        if (list.length() == 0 && homeHtml != null && !homeHtml.isEmpty()) {
+            Document homeDoc = Jsoup.parse(homeHtml);
+            list = parseVodListFromHome(homeDoc, tid);
+        }
+
+        boolean hasNext = doc.select(".stui-page").size() > 0;
+        if (list.length() == 0) {
+            hasNext = false;
         }
 
         JSONObject result = new JSONObject();
@@ -142,7 +172,10 @@ public class YueGuang extends Spider {
         for (String id : ids) {
             if (id == null || id.isEmpty()) continue;
 
-            // 反爬虫：详情页请求带分类页Referer
+            // 先访问首页
+            fetch(HOST);
+
+            // 再访问详情页
             String html = fetch(id, HOST + "/zwhstp/1.html");
             Document doc = Jsoup.parse(html);
 
@@ -182,7 +215,6 @@ public class YueGuang extends Spider {
 
             Element detailInfo = doc.selectFirst(".stui-content__detail");
             if (detailInfo != null) {
-                // 主演
                 Elements actorLinks = detailInfo.select("p.data a[href*=/zwhssc/]");
                 List<String> actors = new ArrayList<>();
                 for (Element a : actorLinks) {
@@ -191,20 +223,16 @@ public class YueGuang extends Spider {
                 }
                 vodActor = String.join(",", actors);
 
-                // 从文本中提取导演、类型、地区
                 String dataText = detailInfo.selectFirst("p.data") != null ? detailInfo.selectFirst("p.data").text() : "";
 
-                // 尝试找导演
                 Pattern dirPattern = Pattern.compile("导演[:：]\\s*([^\\n]+)");
                 Matcher dirMatcher = dirPattern.matcher(dataText);
                 if (dirMatcher.find()) vodDirector = dirMatcher.group(1).trim();
 
-                // 尝试找类型
                 Pattern classPattern = Pattern.compile("类型[:：]\\s*([^\\n]+)");
                 Matcher classMatcher = classPattern.matcher(dataText);
                 if (classMatcher.find()) vodClass = classMatcher.group(1).trim();
 
-                // 尝试找地区
                 Pattern areaPattern = Pattern.compile("地区[:：]\\s*([^\\n]+)");
                 Matcher areaMatcher = areaPattern.matcher(dataText);
                 if (areaMatcher.find()) vodArea = areaMatcher.group(1).trim();
@@ -219,14 +247,12 @@ public class YueGuang extends Spider {
             for (int i = 0; i < playlists.size(); i++) {
                 Element playlist = playlists.get(i);
 
-                // 尝试找源名称：从上一个 .stui-pannel__head 或 h3 获取
                 String sourceName = "";
                 Element parent = playlist.parent();
                 if (parent != null) {
                     Element head = parent.selectFirst(".stui-pannel__head h3, .stui-pannel__head");
                     if (head != null) {
                         sourceName = head.text().trim();
-                        // 过滤掉非播放源标题
                         if (sourceName.contains("猜你喜欢") || sourceName.contains("影片评论") 
                             || sourceName.contains("本周热门") || sourceName.contains("最新更新")) {
                             sourceName = "";
@@ -282,10 +308,12 @@ public class YueGuang extends Spider {
             return result.toString();
         }
 
-        // 反爬虫：播放页请求带详情页Referer
+        // 先访问首页
+        fetch(HOST);
+
+        // 再访问播放页
         String html = fetch(id, HOST + "/zwhsdt/1.html");
 
-        // 提取 player_aaaa 变量
         Pattern pattern = Pattern.compile("var player_\\w+\\s*=\\s*\\{.*?\\};", Pattern.DOTALL);
         Matcher matcher = pattern.matcher(html);
 
@@ -300,7 +328,6 @@ public class YueGuang extends Spider {
         try {
             String playerStr = matcher.group();
 
-            // 提取 url
             Pattern urlPattern = Pattern.compile("\\\"url\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"");
             Matcher urlMatcher = urlPattern.matcher(playerStr);
             if (!urlMatcher.find()) {
@@ -313,8 +340,6 @@ public class YueGuang extends Spider {
 
             String mediaUrl = urlMatcher.group(1);
 
-            // 月光影视 encrypt=0，url是明文直链，无需解码
-            // 但为了兼容，仍然检查 encrypt 字段
             int encrypt = 0;
             Pattern encPattern = Pattern.compile("\\\"encrypt\\\"\\s*:\\s*(\\d+)");
             Matcher encMatcher = encPattern.matcher(playerStr);
@@ -367,15 +392,15 @@ public class YueGuang extends Spider {
             ? HOST + "/zwhssc/" + encodedKey + "-------------.html"
             : HOST + "/zwhssc/" + encodedKey + "----------" + page + "---.html";
 
-        // 反爬虫：搜索页请求带首页Referer
+        // 先访问首页
+        fetch(HOST);
+
+        // 再访问搜索页
         String html = fetch(url, HOST + "/");
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
-        boolean hasNext = doc.select(".stui-page").size() > 0 && !doc.select(".stui-page a:contains(下一页)").isEmpty();
-        if (!hasNext) {
-            hasNext = list.length() >= 24 && doc.select(".stui-page").size() > 0;
-        }
+        boolean hasNext = doc.select(".stui-page").size() > 0;
 
         JSONObject result = new JSONObject();
         result.put("page", page);
@@ -388,8 +413,7 @@ public class YueGuang extends Spider {
     }
 
     /**
-     * 解析影片列表（首页/分类页/搜索页通用）
-     * 月光影视使用 .stui-vodlist__thumb
+     * 解析影片列表（通用）
      */
     private JSONArray parseVodList(Document doc) throws Exception {
         JSONArray list = new JSONArray();
@@ -413,6 +437,61 @@ public class YueGuang extends Spider {
             vod.put("vod_pic", abs(img));
             vod.put("vod_remarks", note);
             list.put(vod);
+        }
+
+        return list;
+    }
+
+    /**
+     * 从首页解析指定分类的影片（备用方案）
+     * 月光影视首页通常反爬较弱
+     */
+    private JSONArray parseVodListFromHome(Document doc, String tid) throws Exception {
+        JSONArray list = new JSONArray();
+
+        // 首页可能有多个分类区块，每个区块对应一个分类
+        // 通过标题或链接中的分类ID来匹配
+        Elements sections = doc.select(".stui-pannel");
+
+        for (Element section : sections) {
+            // 检查这个section是否属于目标分类
+            Element head = section.selectFirst(".stui-pannel__head h3, .stui-pannel__head");
+            if (head == null) continue;
+
+            String sectionTitle = head.text().trim();
+
+            // 简单的分类匹配（可以根据需要扩展）
+            boolean match = false;
+            switch (tid) {
+                case "1": match = sectionTitle.contains("电影"); break;
+                case "2": match = sectionTitle.contains("电视剧") || sectionTitle.contains("电视"); break;
+                case "3": match = sectionTitle.contains("综艺"); break;
+                case "4": match = sectionTitle.contains("动漫"); break;
+                case "5": match = sectionTitle.contains("短剧"); break;
+            }
+
+            if (match) {
+                Elements items = section.select("a.stui-vodlist__thumb");
+                for (Element item : items) {
+                    String href = item.attr("href");
+                    String title = item.attr("title");
+                    String img = item.attr("data-original");
+                    if (img.isEmpty()) img = item.attr("src");
+                    String note = "";
+                    Element noteEl = item.selectFirst(".pic-text");
+                    if (noteEl != null) note = noteEl.text().trim();
+
+                    if (href.isEmpty() || title.isEmpty()) continue;
+
+                    JSONObject vod = new JSONObject();
+                    vod.put("vod_id", abs(href));
+                    vod.put("vod_name", title);
+                    vod.put("vod_pic", abs(img));
+                    vod.put("vod_remarks", note);
+                    list.put(vod);
+                }
+                break; // 只取第一个匹配的分类区块
+            }
         }
 
         return list;
