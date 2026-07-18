@@ -32,7 +32,7 @@ public class WanMei extends Spider {
 
     private HashMap<String, String> getHeaders() {
         HashMap<String, String> headers = new HashMap<>();
-        headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        headers.put("User-Agent", "Mozilla/5.0 (Linux; Android 15; 2407FRK8EC Build/AP3A.240617.008; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0.6613.127 Mobile Safari/537.36");
         headers.put("Referer", SITE_URL + "/");
         return headers;
     }
@@ -374,7 +374,6 @@ public class WanMei extends Spider {
 
         // YZ节点(yzzy)有防盗链，必须走播放页webview解析
         if (flag.contains("YZ") || flag.contains("yz")) {
-            // 返回播放页URL，让webview加载完整页面（含播放器+防盗链校验）
             return Result.get().url(playUrl).parse(1).header(header).string();
         }
 
