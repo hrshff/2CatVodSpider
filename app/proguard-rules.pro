@@ -1,6 +1,9 @@
 # Merge
 -flattenpackagehierarchy com.github.catvod.spider.merge
 
+# 保留 MainActivity，防止 R8 删除它连带删除 SPIDER_CLASSES 和 YueGuang
+-keep class com.github.catvod.MainActivity { *; }
+
 # dontwarn
 -dontwarn org.slf4j.**
 -dontwarn org.xmlpull.v1.**
