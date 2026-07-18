@@ -21,9 +21,13 @@ import java.util.regex.Pattern;
 
 /**
  * 月光影视 (www.shipian8.com)
- * TVBox Java Spider - 播放修复版
+ * TVBox Java Spider - 健壮版
  * 
- * 修复: player_aaaa 变量末尾没有分号，正则匹配失败导致url为空
+ * 改进:
+ * 1. 删除init预热，避免触发请求频率限制
+ * 2. 增加内容长度检查，识别拦截页
+ * 3. 分类页为空时，用首页数据兜底
+ * 4. 增加更多备用选择器
  */
 public class YueGuang extends Spider {
 
@@ -51,9 +55,19 @@ public class YueGuang extends Spider {
         return HOST + url;
     }
 
+    /**
+     * 检查返回内容是否有效（不是拦截页）
+     */
+    private boolean isValidHtml(String html) {
+        if (html == null || html.length() < 5000) return false;
+        // 正常页面应该包含这些元素
+        return html.contains("stui-vodlist") || html.contains("vodlist") || html.contains("class=\"stui-");
+    }
+
     @Override
     public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
+        // 不预热，避免触发请求频率限制
     }
 
     @Override
@@ -94,6 +108,24 @@ public class YueGuang extends Spider {
             : HOST + "/zwhstp/" + tid + "-" + page + ".html";
 
         String html = OkHttp.string(url, getHeader(HOST + "/"));
+
+        // 检查是否被拦截
+        if (!isValidHtml(html)) {
+            // 被拦截了，尝试从首页获取数据兜底
+            String homeHtml = OkHttp.string(HOST, getHeader());
+            if (isValidHtml(homeHtml)) {
+                Document homeDoc = Jsoup.parse(homeHtml);
+                JSONArray list = parseVodList(homeDoc);
+                JSONObject result = new JSONObject();
+                result.put("page", page);
+                result.put("pagecount", page);
+                result.put("limit", 24);
+                result.put("total", list.length());
+                result.put("list", list);
+                return result.toString();
+            }
+        }
+
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
@@ -220,11 +252,18 @@ public class YueGuang extends Spider {
 
         String html = OkHttp.string(id, getHeader(HOST + "/zwhsdt/1.html"));
 
-        // 修复: 去掉末尾分号要求，因为源码中是 }</script> 而不是 };</script>
-        // 同时增加兼容性，支持 player_aaaa, player_config, mac_player 等变量名
+        // 检查是否被拦截
+        if (!isValidHtml(html)) {
+            JSONObject r = new JSONObject();
+            r.put("parse", 0);
+            r.put("url", "");
+            return r.toString();
+        }
+
+        // 修复: 去掉末尾分号要求，匹配 </script>
         Matcher mp = Pattern.compile("var\\s+player_\\w+\\s*=\\s*(\\{.*?\\})\\s*</script>", Pattern.DOTALL).matcher(html);
         if (!mp.find()) {
-            // 备用匹配: 不带 </script> 结尾
+            // 备用匹配
             mp = Pattern.compile("var\\s+player_\\w+\\s*=\\s*(\\{.*?\\})(?:;|\\s*<|\\s*$)", Pattern.DOTALL).matcher(html);
         }
         if (!mp.find()) {
@@ -244,7 +283,7 @@ public class YueGuang extends Spider {
             mediaUrl = java.net.URLDecoder.decode(mediaUrl, "UTF-8");
         }
 
-        // 处理JSON转义的斜杠
+        // 处理JSON转义斜杠
         mediaUrl = mediaUrl.replace("\\/", "/");
 
         boolean isM3u8 = mediaUrl.contains(".m3u8");
@@ -284,18 +323,37 @@ public class YueGuang extends Spider {
         return result.toString();
     }
 
-    // ========== 解析辅助方法 ==========
+    // ========== 解析辅助方法（多选择器兼容）==========
 
     private JSONArray parseVodList(Document doc) throws Exception {
         JSONArray list = new JSONArray();
+
+        // 主选择器
         Elements items = doc.select(".stui-vodlist__thumb");
+
+        // 备用1: 通用MacCMS
+        if (items.isEmpty()) {
+            items = doc.select(".fed-list-pics, .myui-vodlist__thumb, .module-poster-item");
+        }
+
+        // 备用2: 更通用的a标签
+        if (items.isEmpty()) {
+            items = doc.select("a[href*=/zwhsdt/]");
+        }
 
         for (Element item : items) {
             String href = item.attr("href");
             String title = item.attr("title");
             String img = item.attr("data-original");
             if (img.isEmpty()) img = item.attr("data-src");
-            Element noteEl = item.selectFirst(".pic-text");
+            if (img.isEmpty()) {
+                Element imgEl = item.selectFirst("img");
+                if (imgEl != null) {
+                    img = imgEl.attr("data-original");
+                    if (img.isEmpty()) img = imgEl.attr("src");
+                }
+            }
+            Element noteEl = item.selectFirst(".pic-text, .fed-list-remarks, .module-item-note");
             String note = noteEl != null ? noteEl.text().trim() : "";
 
             if (href.isEmpty() || title.isEmpty()) continue;
