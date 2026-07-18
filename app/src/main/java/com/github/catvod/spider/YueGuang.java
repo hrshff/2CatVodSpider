@@ -70,6 +70,7 @@ public class YueGuang extends Spider {
         classes.add(new Class("2", "电视剧"));
         classes.add(new Class("3", "综艺"));
         classes.add(new Class("4", "动漫"));
+        classes.add(new Class("5", "短剧"));
         return Result.string(classes, new ArrayList<>());
     }
 
@@ -154,11 +155,12 @@ public class YueGuang extends Spider {
             page = 1;
         }
 
+        // 月光影视分类页：/zwhstp/{tid}.html，分页：/zwhstp/{tid}-{page}.html
         String url;
         if (page == 1) {
-            url = SITE_URL + "/zwhsfl/" + tid + "-----------.html";
+            url = SITE_URL + "/zwhstp/" + tid + ".html";
         } else {
-            url = SITE_URL + "/zwhsfl/" + tid + "--------" + page + "---.html";
+            url = SITE_URL + "/zwhstp/" + tid + "-" + page + ".html";
         }
 
         String html = fetch(url);
@@ -246,7 +248,6 @@ public class YueGuang extends Spider {
                 actor = sb.toString();
             } else if (text.contains("类型")) {
                 typeName = text.replace("类型：", "").replace("类型:", "").trim();
-                // 去掉后面的地区年份
                 if (typeName.contains("地区")) {
                     typeName = typeName.substring(0, typeName.indexOf("地区")).trim();
                 }
@@ -275,7 +276,7 @@ public class YueGuang extends Spider {
             if (descFull != null) vod.setVodContent(descFull.text().trim());
         }
 
-        // 播放源 - 每个 .stui-content__playlist 是一个线路
+        // 播放源
         List<String> playFroms = new ArrayList<>();
         List<String> playUrls = new ArrayList<>();
 
@@ -359,7 +360,6 @@ public class YueGuang extends Spider {
             return Result.get().url(src).parse(1).header(header).string();
         }
 
-        // 最终回退：播放页webview解析
         return Result.get().url(playUrl).parse(1).header(header).string();
     }
 
@@ -389,7 +389,6 @@ public class YueGuang extends Spider {
         String html = fetch(url);
         Document doc = Jsoup.parse(html);
 
-        // 搜索页有两种结构：.stui-vodlist__thumb 或 .v-thumb
         Elements items = doc.select(".stui-vodlist__thumb, .v-thumb");
         for (Element item : items) {
             String href = fixUrl(item.attr("href"));
