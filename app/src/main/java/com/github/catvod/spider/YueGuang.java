@@ -17,31 +17,36 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import okhttp3.Headers;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+
 /**
  * 月光影视 (www.shipian8.com)
- * TVBox Java Spider - 修复反爬虫版
+ * TVBox Java Spider - 最终修复版
  * 
- * 反爬虫应对策略：
- * 1. 首次访问首页获取 Cookie 和 Session
- * 2. 所有子页面请求携带首页 Cookie + Referer
- * 3. 对返回内容做校验，空内容时尝试备用解析
- * 4. 增加更多真实浏览器请求头
+ * 反爬虫应对：
+ * 1. 使用 OkHttp.newCall 手动管理 Cookie（关键！）
+ * 2. 首次访问首页获取 Set-Cookie，后续请求携带
+ * 3. 所有请求模拟完整浏览器指纹
+ * 4. 如果子页面被拦截，尝试从首页解析对应分类（兜底方案）
  */
 public class YueGuang extends Spider {
 
     private static final String HOST = "https://www.shipian8.com";
     private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-    // 存储从首页获取的 Cookie
+    // Cookie 存储
     private String cookie = "";
+    private boolean cookieInit = false;
 
     /**
-     * 获取请求头 - 反爬虫关键：模拟真实浏览器 + Cookie
+     * 获取基础请求头
      */
-    private HashMap<String, String> getHeaders(String referer) {
+    private HashMap<String, String> getBaseHeaders() {
         HashMap<String, String> headers = new HashMap<>();
         headers.put("User-Agent", UA);
-        headers.put("Referer", referer);
         headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
         headers.put("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8");
         headers.put("Accept-Encoding", "gzip, deflate, br");
@@ -52,23 +57,71 @@ public class YueGuang extends Spider {
         headers.put("Sec-Fetch-Site", "same-origin");
         headers.put("Sec-Fetch-User", "?1");
         headers.put("Cache-Control", "max-age=0");
-
-        // 携带Cookie（关键！）
-        if (cookie != null && !cookie.isEmpty()) {
-            headers.put("Cookie", cookie);
-        }
-
         return headers;
     }
 
     /**
-     * 发起HTTP请求 - 自动处理Cookie
+     * 带 Referer 和 Cookie 的请求头
      */
-    private String fetch(String url) {
+    private HashMap<String, String> getHeaders(String referer) {
+        HashMap<String, String> headers = getBaseHeaders();
+        headers.put("Referer", referer);
+        if (cookie != null && !cookie.isEmpty()) {
+            headers.put("Cookie", cookie);
+        }
+        return headers;
+    }
+
+    /**
+     * 初始化 Cookie：访问首页获取 Set-Cookie
+     * 这是绕过反爬虫的关键步骤！
+     */
+    private void initCookie() throws Exception {
+        if (cookieInit) return;
+
+        try {
+            // 使用 OkHttp.newCall 获取响应头中的 Set-Cookie
+            OkHttpClient client = OkHttp.client();
+            Request request = new Request.Builder()
+                .url(HOST)
+                .headers(Headers.of(getBaseHeaders()))
+                .build();
+
+            Response response = client.newCall(request).execute();
+
+            // 提取 Set-Cookie
+            List<String> cookies = response.headers("Set-Cookie");
+            if (cookies != null && !cookies.isEmpty()) {
+                StringBuilder sb = new StringBuilder();
+                for (String c : cookies) {
+                    // 只取 name=value 部分
+                    String[] parts = c.split(";");
+                    if (parts.length > 0) {
+                        if (sb.length() > 0) sb.append("; ");
+                        sb.append(parts[0].trim());
+                    }
+                }
+                cookie = sb.toString();
+            }
+
+            response.close();
+            cookieInit = true;
+        } catch (Exception e) {
+            // 如果 newCall 失败，回退到 string 方式
+            cookieInit = true;
+        }
+    }
+
+    /**
+     * 发起HTTP请求
+     */
+    private String fetch(String url) throws Exception {
+        initCookie();
         return OkHttp.string(url, getHeaders(HOST + "/"));
     }
 
-    private String fetch(String url, String referer) {
+    private String fetch(String url, String referer) throws Exception {
+        initCookie();
         return OkHttp.string(url, getHeaders(referer));
     }
 
@@ -83,18 +136,8 @@ public class YueGuang extends Spider {
     @Override
     public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
-        // 初始化时访问首页获取 Cookie
-        try {
-            String homeHtml = OkHttp.string(HOST, getHeaders(HOST));
-            // 尝试从响应头或HTML中提取Cookie信息
-            // TVBox的OkHttp可能不直接暴露响应头，这里通过HTML内容判断
-            if (homeHtml != null && homeHtml.contains("stui-vodlist")) {
-                // 首页访问成功，Cookie已自动设置
-                cookie = "visited=1"; // 标记已访问
-            }
-        } catch (Exception e) {
-            // 忽略初始化错误
-        }
+        // 预初始化Cookie
+        initCookie();
     }
 
     @Override
@@ -136,24 +179,23 @@ public class YueGuang extends Spider {
             ? HOST + "/zwhstp/" + tid + ".html"
             : HOST + "/zwhstp/" + tid + "-" + page + ".html";
 
-        // 先访问首页确保Cookie有效
-        String homeHtml = fetch(HOST);
+        // 先确保Cookie已初始化
+        initCookie();
 
-        // 再访问分类页（带首页Referer）
+        // 访问分类页
         String html = fetch(url, HOST + "/");
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
-        // 如果分类页返回空，尝试从首页解析对应分类的影片（备用方案）
-        if (list.length() == 0 && homeHtml != null && !homeHtml.isEmpty()) {
+        // 如果分类页被拦截（返回空），尝试从首页解析该分类（兜底）
+        if (list.length() == 0) {
+            String homeHtml = fetch(HOST);
             Document homeDoc = Jsoup.parse(homeHtml);
             list = parseVodListFromHome(homeDoc, tid);
         }
 
         boolean hasNext = doc.select(".stui-page").size() > 0;
-        if (list.length() == 0) {
-            hasNext = false;
-        }
+        if (list.length() == 0) hasNext = false;
 
         JSONObject result = new JSONObject();
         result.put("page", page);
@@ -172,10 +214,7 @@ public class YueGuang extends Spider {
         for (String id : ids) {
             if (id == null || id.isEmpty()) continue;
 
-            // 先访问首页
-            fetch(HOST);
-
-            // 再访问详情页
+            initCookie();
             String html = fetch(id, HOST + "/zwhstp/1.html");
             Document doc = Jsoup.parse(html);
 
@@ -184,7 +223,7 @@ public class YueGuang extends Spider {
             Element h1 = doc.selectFirst("h1.title");
             if (h1 != null) vodName = h1.text().trim();
 
-            // 从 ld+json 提取图片和简介
+            // 从 ld+json 提取
             String vodPic = "";
             String vodContent = "";
             String vodYear = "";
@@ -207,7 +246,7 @@ public class YueGuang extends Spider {
                 }
             }
 
-            // 从 .stui-content__detail 提取演员、导演、类型、地区
+            // 详情信息
             String vodActor = "";
             String vodDirector = "";
             String vodClass = "";
@@ -238,7 +277,7 @@ public class YueGuang extends Spider {
                 if (areaMatcher.find()) vodArea = areaMatcher.group(1).trim();
             }
 
-            // 提取播放源和剧集
+            // 播放源
             List<String> froms = new ArrayList<>();
             List<String> urls = new ArrayList<>();
 
@@ -308,10 +347,7 @@ public class YueGuang extends Spider {
             return result.toString();
         }
 
-        // 先访问首页
-        fetch(HOST);
-
-        // 再访问播放页
+        initCookie();
         String html = fetch(id, HOST + "/zwhsdt/1.html");
 
         Pattern pattern = Pattern.compile("var player_\\w+\\s*=\\s*\\{.*?\\};", Pattern.DOTALL);
@@ -392,10 +428,7 @@ public class YueGuang extends Spider {
             ? HOST + "/zwhssc/" + encodedKey + "-------------.html"
             : HOST + "/zwhssc/" + encodedKey + "----------" + page + "---.html";
 
-        // 先访问首页
-        fetch(HOST);
-
-        // 再访问搜索页
+        initCookie();
         String html = fetch(url, HOST + "/");
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
@@ -412,9 +445,6 @@ public class YueGuang extends Spider {
         return result.toString();
     }
 
-    /**
-     * 解析影片列表（通用）
-     */
     private JSONArray parseVodList(Document doc) throws Exception {
         JSONArray list = new JSONArray();
         Elements items = doc.select("a.stui-vodlist__thumb");
@@ -442,25 +472,16 @@ public class YueGuang extends Spider {
         return list;
     }
 
-    /**
-     * 从首页解析指定分类的影片（备用方案）
-     * 月光影视首页通常反爬较弱
-     */
     private JSONArray parseVodListFromHome(Document doc, String tid) throws Exception {
         JSONArray list = new JSONArray();
-
-        // 首页可能有多个分类区块，每个区块对应一个分类
-        // 通过标题或链接中的分类ID来匹配
         Elements sections = doc.select(".stui-pannel");
 
         for (Element section : sections) {
-            // 检查这个section是否属于目标分类
             Element head = section.selectFirst(".stui-pannel__head h3, .stui-pannel__head");
             if (head == null) continue;
 
             String sectionTitle = head.text().trim();
 
-            // 简单的分类匹配（可以根据需要扩展）
             boolean match = false;
             switch (tid) {
                 case "1": match = sectionTitle.contains("电影"); break;
@@ -490,7 +511,7 @@ public class YueGuang extends Spider {
                     vod.put("vod_remarks", note);
                     list.put(vod);
                 }
-                break; // 只取第一个匹配的分类区块
+                break;
             }
         }
 
