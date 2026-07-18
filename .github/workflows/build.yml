@@ -25,7 +25,6 @@ jobs:
       - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew clean
           ./gradlew assembleRelease
 
       - name: Generate JAR
@@ -50,14 +49,9 @@ jobs:
           echo "Decompiling APK..."
           java -jar "$DIR/3rd/apktool_2.11.0.jar" d -f --only-main-classes "$APK" -o "$WORK"
 
-          echo "=== APK classes.dex size ==="
-          ls -la "$WORK/smali/" | head -20
-          echo "=== Spider smali files ==="
-          find "$WORK/smali/com/github/catvod/spider" -name "*.smali" 2>/dev/null | sort || echo "No spider smali found"
-
           echo "Preparing spider structure..."
           mkdir -p "$SPIDER/smali/com/github/catvod"
-          cp "$WORK/apktool.yml" "$SPIDER/" 2>/dev/null || true
+          # 不复制 apktool.yml，让 apktool 重新扫描所有 smali 文件
 
           if [ -d "$WORK/smali/com/github/catvod/spider" ]; then
             cp -r "$WORK/smali/com/github/catvod/spider" "$SPIDER/smali/com/github/catvod/"
