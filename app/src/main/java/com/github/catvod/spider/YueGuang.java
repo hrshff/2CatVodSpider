@@ -374,7 +374,7 @@ public class YueGuang extends Spider {
         String encodedKey = URLEncoder.encode(key, "UTF-8");
         String url = HOST + "/zwhssc/" + encodedKey + "-------------.html";
 
-        String html = fetchWithClient(url, getHeader(HOST + "/"));
+        String html = fetchWithClient(url, HOST + "/");
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
