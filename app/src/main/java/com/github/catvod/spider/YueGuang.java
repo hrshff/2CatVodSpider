@@ -20,24 +20,15 @@ import java.util.regex.Pattern;
 /**
  * 月光影视 (www.shipian8.com)
  * TVBox Java Spider
- * 
- * 反爬虫应对：
- * 1. init() 中预热首页，让 TVBox OkHttp 自动获取 Cookie
- * 2. 所有请求携带完整浏览器请求头
- * 3. 如果子页面被拦截，尝试从首页解析对应分类（兜底方案）
  */
 public class YueGuang extends Spider {
 
     private static final String HOST = "https://www.shipian8.com";
     private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-    // Cookie 存储
     private String cookie = "";
     private boolean cookieInit = false;
 
-    /**
-     * 获取基础请求头
-     */
     private HashMap<String, String> getBaseHeaders() {
         HashMap<String, String> headers = new HashMap<>();
         headers.put("User-Agent", UA);
@@ -54,9 +45,6 @@ public class YueGuang extends Spider {
         return headers;
     }
 
-    /**
-     * 带 Referer 和 Cookie 的请求头
-     */
     private HashMap<String, String> getHeaders(String referer) {
         HashMap<String, String> headers = getBaseHeaders();
         headers.put("Referer", referer);
@@ -66,14 +54,9 @@ public class YueGuang extends Spider {
         return headers;
     }
 
-    /**
-     * 初始化 Cookie：访问首页获取 Set-Cookie
-     * 使用 TVBox 封装的 OkHttp.string()，内部自动处理 Cookie
-     */
     private void initCookie() throws Exception {
         if (cookieInit) return;
         try {
-            // 预热首页，让 OkHttp 自动保存 Cookie
             OkHttp.string(HOST, getBaseHeaders());
             cookieInit = true;
         } catch (Exception e) {
@@ -81,9 +64,6 @@ public class YueGuang extends Spider {
         }
     }
 
-    /**
-     * 发起HTTP请求
-     */
     private String fetch(String url) throws Exception {
         initCookie();
         return OkHttp.string(url, getHeaders(HOST + "/"));
@@ -152,7 +132,6 @@ public class YueGuang extends Spider {
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
-        // 兜底：如果分类页被拦截（返回空），尝试从首页解析该分类
         if (list.length() == 0) {
             String homeHtml = fetch(HOST);
             Document homeDoc = Jsoup.parse(homeHtml);
@@ -183,27 +162,25 @@ public class YueGuang extends Spider {
             String html = fetch(id, HOST + "/zwhstp/1.html");
             Document doc = Jsoup.parse(html);
 
-            // 标题
             String vodName = "";
             Element h1 = doc.selectFirst("h1.title");
             if (h1 != null) vodName = h1.text().trim();
 
-            // 从 ld+json 提取
             String vodPic = "";
             String vodContent = "";
             String vodYear = "";
             Element ldScript = doc.selectFirst("script[type=application/ld+json]");
             if (ldScript != null) {
                 String ldJson = ldScript.html();
-                Pattern picPattern = Pattern.compile("\"thumbnailUrl\"\s*:\s*\"([^\"]*)\"");
+                Pattern picPattern = Pattern.compile("\\\"thumbnailUrl\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"");
                 Matcher picMatcher = picPattern.matcher(ldJson);
                 if (picMatcher.find()) vodPic = picMatcher.group(1);
 
-                Pattern descPattern = Pattern.compile("\"description\"\s*:\s*\"([^\"]*)\"");
+                Pattern descPattern = Pattern.compile("\\\"description\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"");
                 Matcher descMatcher = descPattern.matcher(ldJson);
                 if (descMatcher.find()) vodContent = descMatcher.group(1).replace("&amp;nbsp;", " ").trim();
 
-                Pattern datePattern = Pattern.compile("\"uploadDate\"\s*:\s*\"([^\"]*)\"");
+                Pattern datePattern = Pattern.compile("\\\"uploadDate\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"");
                 Matcher dateMatcher = datePattern.matcher(ldJson);
                 if (dateMatcher.find()) {
                     String date = dateMatcher.group(1);
@@ -211,7 +188,6 @@ public class YueGuang extends Spider {
                 }
             }
 
-            // 详情信息
             String vodActor = "";
             String vodDirector = "";
             String vodClass = "";
@@ -229,20 +205,19 @@ public class YueGuang extends Spider {
 
                 String dataText = detailInfo.selectFirst("p.data") != null ? detailInfo.selectFirst("p.data").text() : "";
 
-                Pattern dirPattern = Pattern.compile("导演[:：]\s*([^\n]+)");
+                Pattern dirPattern = Pattern.compile("导演[:：]\\s*([^\\n]+)");
                 Matcher dirMatcher = dirPattern.matcher(dataText);
                 if (dirMatcher.find()) vodDirector = dirMatcher.group(1).trim();
 
-                Pattern classPattern = Pattern.compile("类型[:：]\s*([^\n]+)");
+                Pattern classPattern = Pattern.compile("类型[:：]\\s*([^\\n]+)");
                 Matcher classMatcher = classPattern.matcher(dataText);
                 if (classMatcher.find()) vodClass = classMatcher.group(1).trim();
 
-                Pattern areaPattern = Pattern.compile("地区[:：]\s*([^\n]+)");
+                Pattern areaPattern = Pattern.compile("地区[:：]\\s*([^\\n]+)");
                 Matcher areaMatcher = areaPattern.matcher(dataText);
                 if (areaMatcher.find()) vodArea = areaMatcher.group(1).trim();
             }
 
-            // 播放源
             List<String> froms = new ArrayList<>();
             List<String> urls = new ArrayList<>();
 
@@ -301,8 +276,7 @@ public class YueGuang extends Spider {
         initCookie();
         String html = fetch(id, HOST + "/zwhsdt/1.html");
 
-        // 提取 player_aaaa 变量
-        Pattern playerPattern = Pattern.compile("var player_\w+\s*=\s*\{.*?\};", Pattern.DOTALL);
+        Pattern playerPattern = Pattern.compile("var player_\\w+\\s*=\\s*\\{.*?\\};", Pattern.DOTALL);
         Matcher playerMatcher = playerPattern.matcher(html);
 
         if (!playerMatcher.find()) {
@@ -314,17 +288,14 @@ public class YueGuang extends Spider {
 
         String playerStr = playerMatcher.group();
 
-        // 提取 url
-        Pattern urlPattern = Pattern.compile("\"url\"\s*:\s*\"([^\"]*)\"");
+        Pattern urlPattern = Pattern.compile("\\\"url\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"");
         Matcher urlMatcher = urlPattern.matcher(playerStr);
         String mediaUrl = urlMatcher.find() ? urlMatcher.group(1) : "";
 
-        // 提取 encrypt
-        Pattern encryptPattern = Pattern.compile("\"encrypt\"\s*:\s*(\d+)");
+        Pattern encryptPattern = Pattern.compile("\\\"encrypt\\\"\\s*:\\s*(\\d+)");
         Matcher encryptMatcher = encryptPattern.matcher(playerStr);
         int encrypt = encryptMatcher.find() ? Integer.parseInt(encryptMatcher.group(1)) : 0;
 
-        // 解密
         if (encrypt == 1 && !mediaUrl.isEmpty()) {
             mediaUrl = java.net.URLDecoder.decode(mediaUrl, "UTF-8");
         }
@@ -366,8 +337,6 @@ public class YueGuang extends Spider {
 
         return result.toString();
     }
-
-    // ========== 解析辅助方法 ==========
 
     private JSONArray parseVodList(Document doc) throws Exception {
         JSONArray list = new JSONArray();
@@ -417,8 +386,6 @@ public class YueGuang extends Spider {
 
     private JSONArray parseVodListFromHome(Document doc, String tid) throws Exception {
         JSONArray list = new JSONArray();
-        // 首页按分类区块解析，这里简化处理：返回首页所有影片
-        // 实际可根据 tid 匹配对应区块
         return parseVodList(doc);
     }
 }
