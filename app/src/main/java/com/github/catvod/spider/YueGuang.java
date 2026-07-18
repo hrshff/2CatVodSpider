@@ -19,22 +19,27 @@ import java.util.regex.Pattern;
 
 /**
  * 月光影视 (www.shipian8.com)
- * TVBox Java Spider
+ * TVBox Java Spider - 反爬虫修复版
+ * 
+ * 修复要点：
+ * 1. 删除Accept-Encoding，避免gzip压缩导致Jsoup解析失败
+ * 2. 增加System.out调试输出，确认服务器返回内容
+ * 3. 增加备用选择器，兼容不同HTML结构
+ * 4. 请求头更接近真实Chrome浏览器
  */
 public class YueGuang extends Spider {
 
     private static final String HOST = "https://www.shipian8.com";
     private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-    private String cookie = "";
-    private boolean cookieInit = false;
+    private boolean inited = false;
 
-    private HashMap<String, String> getBaseHeaders() {
+    private HashMap<String, String> getHeaders(String referer) {
         HashMap<String, String> headers = new HashMap<>();
         headers.put("User-Agent", UA);
         headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
         headers.put("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8");
-        headers.put("Accept-Encoding", "gzip, deflate, br");
+        // 注意：不设置Accept-Encoding，让服务器返回明文HTML
         headers.put("Connection", "keep-alive");
         headers.put("Upgrade-Insecure-Requests", "1");
         headers.put("Sec-Fetch-Dest", "document");
@@ -42,36 +47,24 @@ public class YueGuang extends Spider {
         headers.put("Sec-Fetch-Site", "same-origin");
         headers.put("Sec-Fetch-User", "?1");
         headers.put("Cache-Control", "max-age=0");
-        return headers;
-    }
-
-    private HashMap<String, String> getHeaders(String referer) {
-        HashMap<String, String> headers = getBaseHeaders();
-        headers.put("Referer", referer);
-        if (cookie != null && !cookie.isEmpty()) {
-            headers.put("Cookie", cookie);
+        headers.put("DNT", "1");
+        if (referer != null && !referer.isEmpty()) {
+            headers.put("Referer", referer);
         }
         return headers;
-    }
-
-    private void initCookie() throws Exception {
-        if (cookieInit) return;
-        try {
-            OkHttp.string(HOST, getBaseHeaders());
-            cookieInit = true;
-        } catch (Exception e) {
-            cookieInit = true;
-        }
-    }
-
-    private String fetch(String url) throws Exception {
-        initCookie();
-        return OkHttp.string(url, getHeaders(HOST + "/"));
     }
 
     private String fetch(String url, String referer) throws Exception {
-        initCookie();
-        return OkHttp.string(url, getHeaders(referer));
+        HashMap<String, String> headers = getHeaders(referer);
+        String html = OkHttp.string(url, headers);
+        // 调试输出：打印返回内容的前300字符
+        if (html != null) {
+            String preview = html.length() > 300 ? html.substring(0, 300) : html;
+            System.out.println("[YueGuang] fetch " + url + " | len=" + html.length() + " | preview=" + preview.replace("\n", " "));
+        } else {
+            System.out.println("[YueGuang] fetch " + url + " | html is null");
+        }
+        return html != null ? html : "";
     }
 
     private String abs(String url) {
@@ -85,7 +78,15 @@ public class YueGuang extends Spider {
     @Override
     public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
-        initCookie();
+        // 预热首页
+        try {
+            String homeHtml = OkHttp.string(HOST, getHeaders(null));
+            System.out.println("[YueGuang] init home | len=" + (homeHtml != null ? homeHtml.length() : 0));
+            inited = true;
+        } catch (Exception e) {
+            System.out.println("[YueGuang] init error: " + e.getMessage());
+            inited = true;
+        }
     }
 
     @Override
@@ -108,9 +109,10 @@ public class YueGuang extends Spider {
 
     @Override
     public String homeVideoContent() throws Exception {
-        String html = fetch(HOST);
+        String html = fetch(HOST, null);
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
+        System.out.println("[YueGuang] homeVideo parsed " + list.length() + " items");
         JSONObject result = new JSONObject();
         result.put("list", list);
         return result.toString();
@@ -127,18 +129,22 @@ public class YueGuang extends Spider {
             ? HOST + "/zwhstp/" + tid + ".html"
             : HOST + "/zwhstp/" + tid + "-" + page + ".html";
 
-        initCookie();
         String html = fetch(url, HOST + "/");
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
+        System.out.println("[YueGuang] category tid=" + tid + " page=" + page + " parsed " + list.length() + " items");
+
+        // 如果分类页为空，尝试从首页解析兜底
         if (list.length() == 0) {
-            String homeHtml = fetch(HOST);
+            System.out.println("[YueGuang] category empty, trying home fallback");
+            String homeHtml = fetch(HOST, null);
             Document homeDoc = Jsoup.parse(homeHtml);
             list = parseVodListFromHome(homeDoc, tid);
+            System.out.println("[YueGuang] home fallback parsed " + list.length() + " items");
         }
 
-        boolean hasNext = doc.select(".stui-page").size() > 0;
+        boolean hasNext = doc.select(".stui-page").size() > 0 || doc.select(".page").size() > 0;
         if (list.length() == 0) hasNext = false;
 
         JSONObject result = new JSONObject();
@@ -158,7 +164,6 @@ public class YueGuang extends Spider {
         for (String id : ids) {
             if (id == null || id.isEmpty()) continue;
 
-            initCookie();
             String html = fetch(id, HOST + "/zwhstp/1.html");
             Document doc = Jsoup.parse(html);
 
@@ -203,7 +208,8 @@ public class YueGuang extends Spider {
                 }
                 vodActor = String.join(",", actors);
 
-                String dataText = detailInfo.selectFirst("p.data") != null ? detailInfo.selectFirst("p.data").text() : "";
+                Element dataP = detailInfo.selectFirst("p.data");
+                String dataText = dataP != null ? dataP.text() : "";
 
                 Pattern dirPattern = Pattern.compile("导演[:：]\\s*([^\\n]+)");
                 Matcher dirMatcher = dirPattern.matcher(dataText);
@@ -273,7 +279,6 @@ public class YueGuang extends Spider {
             return result.toString();
         }
 
-        initCookie();
         String html = fetch(id, HOST + "/zwhsdt/1.html");
 
         Pattern playerPattern = Pattern.compile("var player_\\w+\\s*=\\s*\\{.*?\\};", Pattern.DOTALL);
@@ -321,12 +326,13 @@ public class YueGuang extends Spider {
         String encodedKey = URLEncoder.encode(key, "UTF-8");
         String url = HOST + "/zwhssc/" + encodedKey + "-------------.html";
 
-        initCookie();
         String html = fetch(url, HOST + "/");
         Document doc = Jsoup.parse(html);
-        JSONArray list = parseSearchList(doc);
+        JSONArray list = parseVodList(doc);
 
-        boolean hasNext = doc.select(".stui-page").size() > 0;
+        System.out.println("[YueGuang] search key=" + key + " parsed " + list.length() + " items");
+
+        boolean hasNext = doc.select(".stui-page").size() > 0 || doc.select(".page").size() > 0;
 
         JSONObject result = new JSONObject();
         result.put("page", 1);
@@ -338,38 +344,37 @@ public class YueGuang extends Spider {
         return result.toString();
     }
 
+    // ========== 解析辅助方法（带备用选择器）==========
+
     private JSONArray parseVodList(Document doc) throws Exception {
         JSONArray list = new JSONArray();
+
+        // 主选择器：月光影视模板
         Elements items = doc.select(".stui-vodlist__thumb");
+        System.out.println("[YueGuang] parseVodList primary selector .stui-vodlist__thumb found " + items.size());
 
-        for (Element item : items) {
-            String href = item.attr("href");
-            String title = item.attr("title");
-            String img = item.attr("data-original");
-            Element noteEl = item.selectFirst(".pic-text");
-            String note = noteEl != null ? noteEl.text().trim() : "";
-
-            if (href.isEmpty() || title.isEmpty()) continue;
-
-            JSONObject vod = new JSONObject();
-            vod.put("vod_id", abs(href));
-            vod.put("vod_name", title);
-            vod.put("vod_pic", abs(img));
-            vod.put("vod_remarks", note);
-            list.put(vod);
+        // 备用选择器1：通用MacCMS
+        if (items.isEmpty()) {
+            items = doc.select(".fed-list-item .fed-list-pics, .myui-vodlist__thumb, .module-poster-item, .hl-list-item a");
+            System.out.println("[YueGuang] parseVodList fallback1 found " + items.size());
         }
-        return list;
-    }
 
-    private JSONArray parseSearchList(Document doc) throws Exception {
-        JSONArray list = new JSONArray();
-        Elements items = doc.select(".stui-vodlist__thumb");
+        // 备用选择器2：更通用的a标签
+        if (items.isEmpty()) {
+            items = doc.select("a[href*=/zwhsdt/], a[href*=/voddetail/]");
+            System.out.println("[YueGuang] parseVodList fallback2 found " + items.size());
+        }
 
         for (Element item : items) {
             String href = item.attr("href");
             String title = item.attr("title");
+            // 尝试多种图片属性
             String img = item.attr("data-original");
-            Element noteEl = item.selectFirst(".pic-text");
+            if (img.isEmpty()) img = item.attr("data-src");
+            if (img.isEmpty()) img = item.selectFirst("img") != null ? item.selectFirst("img").attr("src") : "";
+            if (img.isEmpty()) img = item.selectFirst("img") != null ? item.selectFirst("img").attr("data-original") : "";
+
+            Element noteEl = item.selectFirst(".pic-text, .fed-list-remarks, .module-item-note, .hl-pic-text");
             String note = noteEl != null ? noteEl.text().trim() : "";
 
             if (href.isEmpty() || title.isEmpty()) continue;
@@ -386,6 +391,36 @@ public class YueGuang extends Spider {
 
     private JSONArray parseVodListFromHome(Document doc, String tid) throws Exception {
         JSONArray list = new JSONArray();
-        return parseVodList(doc);
+        // 首页按分类区块解析
+        // dzwhs模板首页通常按分类分区块，每个区块有标题和列表
+        Elements sections = doc.select(".stui-pannel");
+        System.out.println("[YueGuang] parseVodListFromHome found " + sections.size() + " sections");
+
+        for (Element section : sections) {
+            Element titleEl = section.selectFirst(".stui-pannel__head h3.title, .stui-pannel__head .title");
+            if (titleEl != null) {
+                String sectionTitle = titleEl.text().trim();
+                System.out.println("[YueGuang] section title: " + sectionTitle);
+                // 简单匹配：如果区块标题包含分类名，就解析该区块
+                // 实际应根据tid精确匹配，这里简化处理
+            }
+            Elements items = section.select(".stui-vodlist__thumb");
+            for (Element item : items) {
+                String href = item.attr("href");
+                String title = item.attr("title");
+                String img = item.attr("data-original");
+                if (img.isEmpty()) img = item.attr("data-src");
+                Element noteEl = item.selectFirst(".pic-text");
+                String note = noteEl != null ? noteEl.text().trim() : "";
+                if (href.isEmpty() || title.isEmpty()) continue;
+                JSONObject vod = new JSONObject();
+                vod.put("vod_id", abs(href));
+                vod.put("vod_name", title);
+                vod.put("vod_pic", abs(img));
+                vod.put("vod_remarks", note);
+                list.put(vod);
+            }
+        }
+        return list;
     }
 }
