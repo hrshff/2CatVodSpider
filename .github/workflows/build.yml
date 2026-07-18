@@ -33,8 +33,6 @@ jobs:
           cd jar
           DIR="$(pwd)"
           APK="$DIR/../app/build/outputs/apk/release/app-release-unsigned.apk"
-          WORK="$DIR/Smali_classes"
-          SPIDER="$DIR/spider.jar"
           OUT="$DIR/custom_spider.jar"
           MD5="$OUT.md5"
 
@@ -45,54 +43,25 @@ jobs:
           fi
 
           rm -f "$OUT" "$MD5"
-          rm -rf "$WORK" "$SPIDER"
 
-          echo "Decompiling APK..."
-          java -jar "$DIR/3rd/apktool_2.11.0.jar" d -f --only-main-classes "$APK" -o "$WORK"
+          echo "Extracting classes.dex from APK..."
+          unzip -j "$APK" classes.dex -d "$DIR/"
+          mv "$DIR/classes.dex" "$OUT"
 
-          echo "Preparing spider structure..."
-          mkdir -p "$SPIDER/smali/com/github/catvod"
-          cp "$WORK/apktool.yml" "$SPIDER/"
-
-          # 复制所有 com/github/catvod 下的包
-          for pkg in spider js net bean crawler utils; do
-            if [ -d "$WORK/smali/com/github/catvod/$pkg" ]; then
-              cp -r "$WORK/smali/com/github/catvod/$pkg" "$SPIDER/smali/com/github/catvod/"
-              echo "$pkg classes copied"
-            fi
-          done
-
-          echo "Repacking JAR..."
-          java -jar "$DIR/3rd/apktool_2.11.0.jar" b "$SPIDER" -c
-
-          ls -la "$SPIDER/dist/"
-
-          if [ -f "$SPIDER/dist/app-release-unsigned.apk" ]; then
-            mv "$SPIDER/dist/app-release-unsigned.apk" "$OUT"
-          elif [ -f "$SPIDER/dist/dex.jar" ]; then
-            mv "$SPIDER/dist/dex.jar" "$OUT"
-          else
-            echo "Available files in dist:"
-            ls -la "$SPIDER/dist/"
-            exit 1
-          fi
+          echo "=== Verifying JAR ==="
+          echo "--- Spider classes ---"
+          strings "$OUT" | grep "Lcom/github/catvod/spider/" | sort | uniq
+          echo "--- Third-party libs ---"
+          strings "$OUT" | grep "Lorg/jsoup/" | head -5
+          strings "$OUT" | grep "Lokhttp3/" | head -5
+          strings "$OUT" | grep "Lcom/google/gson/" | head -5
+          echo "--- YueGuang ---"
+          strings "$OUT" | grep "Lcom/github/catvod/spider/YueGuang;" && echo "✅ YueGuang FOUND" || echo "❌ YueGuang NOT FOUND"
 
           md5sum "$OUT" | awk '{print $1}' > "$MD5"
-          rm -rf "$SPIDER" "$WORK"
 
           echo "Done!"
           ls -lh "$OUT"
-
-      - name: Verify JAR
-        run: |
-          echo "=== Extracting classes.dex ==="
-          cd jar
-          unzip -j custom_spider.jar classes.dex -d /tmp/
-          echo "=== Checking YueGuang in dex ==="
-          strings /tmp/classes.dex | grep "Lcom/github/catvod/spider/YueGuang;" && echo "✅ YueGuang FOUND in dex" || echo "❌ YueGuang NOT FOUND in dex"
-          echo "=== Checking all spider classes ==="
-          strings /tmp/classes.dex | grep "Lcom/github/catvod/spider/" | sort | uniq
-          rm -f /tmp/classes.dex
 
       - name: Commit and Push JAR to repo
         run: |
