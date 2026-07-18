@@ -6,7 +6,25 @@ import android.os.Bundle;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.databinding.ActivityMainBinding;
 import com.github.catvod.spider.Init;
+import com.github.catvod.spider.AList;
+import com.github.catvod.spider.Bili;
+import com.github.catvod.spider.Jable;
+import com.github.catvod.spider.Jianpian;
+import com.github.catvod.spider.Kanqiu;
+import com.github.catvod.spider.Local;
+import com.github.catvod.spider.MQiTV;
+import com.github.catvod.spider.Market;
+import com.github.catvod.spider.Mogu;
 import com.github.catvod.spider.PTT;
+import com.github.catvod.spider.Proxy;
+import com.github.catvod.spider.Push;
+import com.github.catvod.spider.Samba;
+import com.github.catvod.spider.WanMei;
+import com.github.catvod.spider.WebDAV;
+import com.github.catvod.spider.XtreamCode;
+import com.github.catvod.spider.YHDM;
+import com.github.catvod.spider.YingHua;
+import com.github.catvod.spider.YueGuang;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParser;
@@ -26,6 +44,16 @@ public class MainActivity extends Activity {
     private ExecutorService executor;
     private Spider spider;
     private Gson gson;
+
+    // 显式引用所有 Spider 类，防止 R8 tree shaking 删除
+    @SuppressWarnings("unused")
+    private static final Class<?>[] SPIDER_CLASSES = new Class<?>[] {
+        AList.class, Bili.class, Jable.class, Jianpian.class,
+        Kanqiu.class, Local.class, MQiTV.class, Market.class,
+        Mogu.class, PTT.class, Proxy.class, Push.class,
+        Samba.class, WanMei.class, WebDAV.class, XtreamCode.class,
+        YHDM.class, YingHua.class, YueGuang.class
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
