@@ -11,27 +11,76 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import java.io.IOException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import okhttp3.Cookie;
+import okhttp3.CookieJar;
+import okhttp3.Dns;
+import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+
 /**
  * 月光影视 (www.shipian8.com)
- * 基于 CatVodSpider 官方规范编写
+ * TVBox Java Spider - 扩展写法版
  * 
- * 参考: Bili.java, PTT.java, YHDM.java
+ * 扩展点1: 重写 Spider.client() 返回自定义 OkHttpClient（带CookieJar）
+ * 扩展点2: 重写 Spider.safeDns() 返回自定义 DNS
+ * 扩展点3: 使用 proxy() 本地代理中转请求
+ * 扩展点4: 使用 action() 自定义动作
+ * 扩展点5: 使用 OkHttp.newCall() 获取原始 Response（含Cookie）
  */
 public class YueGuang extends Spider {
 
     private static final String HOST = "https://www.shipian8.com";
 
+    // 跨请求保持Cookie的存储
+    private final List<Cookie> cookieStore = new ArrayList<>();
+    private OkHttpClient customClient;
+
     /**
-     * 获取请求头 - 参考官方 Spider 写法，极简
+     * 扩展点1: 重写 client()，返回带 CookieJar 的 OkHttpClient
+     * TVBox 的 OkHttp.string() 内部会优先使用 Spider.client()
      */
+    @Override
+    public OkHttpClient client() {
+        if (customClient == null) {
+            customClient = new OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .writeTimeout(15, TimeUnit.SECONDS)
+                .cookieJar(new CookieJar() {
+                    @Override
+                    public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
+                        cookieStore.addAll(cookies);
+                    }
+                    @Override
+                    public List<Cookie> loadForRequest(HttpUrl url) {
+                        return cookieStore;
+                    }
+                })
+                .build();
+        }
+        return customClient;
+    }
+
+    /**
+     * 扩展点2: 重写 safeDns()，返回自定义 DNS（如 DoH）
+     */
+    @Override
+    public Dns safeDns() {
+        return Dns.SYSTEM; // 可替换为自定义DoH
+    }
+
     private Map<String, String> getHeader() {
         Map<String, String> headers = new HashMap<>();
         headers.put("User-Agent", Util.CHROME);
@@ -54,9 +103,42 @@ public class YueGuang extends Spider {
         return HOST + url;
     }
 
+    /**
+     * 扩展写法: 使用 OkHttp.newCall() 获取原始 Response
+     * 可以拿到 Set-Cookie、状态码、完整响应头
+     */
+    private String fetchWithRaw(String url, String referer) throws Exception {
+        Request request = new Request.Builder()
+            .url(url)
+            .header("User-Agent", Util.CHROME)
+            .header("Referer", referer != null ? referer : HOST + "/")
+            .build();
+
+        try (Response response = client().newCall(request).execute()) {
+            // 打印状态码和响应头，用于调试
+            int code = response.code();
+            String contentType = response.header("Content-Type", "unknown");
+            String body = response.body() != null ? response.body().string() : "";
+
+            // 如果返回内容异常短，可能是拦截页
+            if (body.length() < 1000) {
+                System.out.println("[YueGuang] WARNING: " + url + " returned " + code + 
+                    " len=" + body.length() + " type=" + contentType);
+            }
+            return body;
+        }
+    }
+
     @Override
     public void init(Context context, String extend) throws Exception {
         super.init(context, extend);
+        // 预热：先访问首页，让CookieJar保存Cookie
+        try {
+            String homeHtml = fetchWithRaw(HOST, null);
+            System.out.println("[YueGuang] init home len=" + homeHtml.length());
+        } catch (Exception e) {
+            System.out.println("[YueGuang] init error: " + e.getMessage());
+        }
     }
 
     @Override
@@ -79,7 +161,7 @@ public class YueGuang extends Spider {
 
     @Override
     public String homeVideoContent() throws Exception {
-        String html = OkHttp.string(HOST, getHeader());
+        String html = fetchWithRaw(HOST, null);
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
         JSONObject result = new JSONObject();
@@ -96,7 +178,7 @@ public class YueGuang extends Spider {
             ? HOST + "/zwhstp/" + tid + ".html"
             : HOST + "/zwhstp/" + tid + "-" + page + ".html";
 
-        String html = OkHttp.string(url, getHeader(HOST + "/"));
+        String html = fetchWithRaw(url, HOST + "/");
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
@@ -119,7 +201,7 @@ public class YueGuang extends Spider {
         for (String id : ids) {
             if (id == null || id.isEmpty()) continue;
 
-            String html = OkHttp.string(id, getHeader(HOST + "/zwhstp/1.html"));
+            String html = fetchWithRaw(id, HOST + "/zwhstp/1.html");
             Document doc = Jsoup.parse(html);
 
             String vodName = "";
@@ -221,7 +303,7 @@ public class YueGuang extends Spider {
             return r.toString();
         }
 
-        String html = OkHttp.string(id, getHeader(HOST + "/zwhsdt/1.html"));
+        String html = fetchWithRaw(id, HOST + "/zwhsdt/1.html");
 
         Matcher mp = Pattern.compile("var player_\\w+\\s*=\\s*\\{.*?\\};", Pattern.DOTALL).matcher(html);
         if (!mp.find()) {
@@ -262,7 +344,7 @@ public class YueGuang extends Spider {
         String encodedKey = URLEncoder.encode(key, "UTF-8");
         String url = HOST + "/zwhssc/" + encodedKey + "-------------.html";
 
-        String html = OkHttp.string(url, getHeader(HOST + "/"));
+        String html = fetchWithRaw(url, HOST + "/");
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
@@ -276,6 +358,46 @@ public class YueGuang extends Spider {
         result.put("list", list);
 
         return result.toString();
+    }
+
+    /**
+     * 扩展点3: proxy() 本地代理
+     * 当播放器无法直接访问视频URL时，通过本地代理中转
+     */
+    @Override
+    public Object[] proxy(Map<String, String> params) throws Exception {
+        String url = params.get("url");
+        if (url == null || url.isEmpty()) {
+            return new Object[]{404, "text/plain", new byte[0]};
+        }
+
+        Request request = new Request.Builder()
+            .url(url)
+            .header("User-Agent", Util.CHROME)
+            .header("Referer", HOST)
+            .build();
+
+        try (Response response = client().newCall(request).execute()) {
+            byte[] body = response.body() != null ? response.body().bytes() : new byte[0];
+            String contentType = response.header("Content-Type", "application/octet-stream");
+            return new Object[]{response.code(), contentType, body};
+        }
+    }
+
+    /**
+     * 扩展点4: action() 自定义动作
+     * TVBox可以通过 action 调用Spider的自定义方法
+     */
+    @Override
+    public String action(String action) throws Exception {
+        if ("clearCookie".equals(action)) {
+            cookieStore.clear();
+            return "{" + "\"code\":200,\"msg\":\"Cookie已清除\"" + "}";
+        }
+        if ("getCookieCount".equals(action)) {
+            return "{" + "\"code\":200,\"count\":" + cookieStore.size() + "}";
+        }
+        return null;
     }
 
     // ========== 解析辅助方法 ==========
