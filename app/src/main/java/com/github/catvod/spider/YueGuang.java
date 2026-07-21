@@ -1,6 +1,7 @@
 package com.github.catvod.spider;
 
 import android.content.Context;
+import android.util.Log;
 import android.text.TextUtils;
 
 import com.github.catvod.bean.Class;
@@ -130,11 +131,11 @@ public class YueGuang extends Spider {
             ? SITE_URL + "/zwhstp/" + tid + ".html"
             : SITE_URL + "/zwhstp/" + tid + "-" + page + ".html";
 
-        System.out.println("[YueGuang-DEBUG] categoryContent url=" + url);
+        Log.d("YueGuang", "[YueGuang-DEBUG] categoryContent url=" + url);
         String html = fetch(url, SITE_URL + "/");
 
         if (!isValidHtml(html)) {
-            System.out.println("[YueGuang-DEBUG] categoryContent INVALID html, fallback to home");
+            Log.d("YueGuang", "[YueGuang-DEBUG] categoryContent INVALID html, fallback to home");
             String homeHtml = fetch(SITE_URL, null);
             if (isValidHtml(homeHtml)) {
                 Document homeDoc = Jsoup.parse(homeHtml);
@@ -191,7 +192,7 @@ public class YueGuang extends Spider {
         // limit 使用实际列表大小（月光每页固定20项）
         int limit = list.size() > 0 ? list.size() : 24;
 
-        System.out.println("[YueGuang-DEBUG] categoryContent page=" + page + " items=" + list.size() + " pageCount=" + pageCount + " total=" + total + " limit=" + limit);
+        Log.d("YueGuang", "[YueGuang-DEBUG] categoryContent page=" + page + " items=" + list.size() + " pageCount=" + pageCount + " total=" + total + " limit=" + limit);
         return Result.get().vod(list).page(page, pageCount, limit, total).string();
     }
 
@@ -296,48 +297,48 @@ public class YueGuang extends Spider {
             return Result.get().url("").string();
         }
 
-        System.out.println("[YueGuang-DEBUG] playerContent start, id=" + id + ", flag=" + flag);
+        Log.d("YueGuang", "[YueGuang-DEBUG] playerContent start, id=" + id + ", flag=" + flag);
 
         String html = fetch(id, SITE_URL + "/zwhsdt/1.html");
         String preview = html.length() > 200 ? html.substring(0, 200) : html;
-        System.out.println("[YueGuang-DEBUG] playerContent html len=" + html.length() + " preview=" + preview.replace("\n", " "));
+        Log.d("YueGuang", "[YueGuang-DEBUG] playerContent html len=" + html.length() + " preview=" + preview.replace("\n", " "));
 
         if (!isValidHtml(html)) {
-            System.out.println("[YueGuang-DEBUG] playerContent INVALID html");
+            Log.d("YueGuang", "[YueGuang-DEBUG] playerContent INVALID html");
             return Result.get().url("").string();
         }
 
         Matcher mp = Pattern.compile("var\\s+player_\\w+\\s*=\\s*(\\{.*?\\})\\s*</script>", Pattern.DOTALL).matcher(html);
         boolean found = mp.find();
-        System.out.println("[YueGuang-DEBUG] playerContent primary regex found=" + found);
+        Log.d("YueGuang", "[YueGuang-DEBUG] playerContent primary regex found=" + found);
 
         if (!found) {
             mp = Pattern.compile("var\\s+player_\\w+\\s*=\\s*(\\{.*?\\})(?:;|\\s*<|\\s*$)", Pattern.DOTALL).matcher(html);
             found = mp.find();
-            System.out.println("[YueGuang-DEBUG] playerContent fallback regex found=" + found);
+            Log.d("YueGuang", "[YueGuang-DEBUG] playerContent fallback regex found=" + found);
         }
 
         if (!found) {
-            System.out.println("[YueGuang-DEBUG] playerContent NO MATCH");
+            Log.d("YueGuang", "[YueGuang-DEBUG] playerContent NO MATCH");
             return Result.get().url("").string();
         }
 
         String playerStr = mp.group(1);
-        System.out.println("[YueGuang-DEBUG] playerContent matched=" + playerStr.substring(0, Math.min(200, playerStr.length())));
+        Log.d("YueGuang", "[YueGuang-DEBUG] playerContent matched=" + playerStr.substring(0, Math.min(200, playerStr.length())));
 
         Matcher mu = Pattern.compile("\\\"url\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"").matcher(playerStr);
         String mediaUrl = mu.find() ? mu.group(1) : "";
         Matcher me = Pattern.compile("\\\"encrypt\\\"\\s*:\\s*(\\d+)").matcher(playerStr);
         int encrypt = me.find() ? Integer.parseInt(me.group(1)) : 0;
 
-        System.out.println("[YueGuang-DEBUG] playerContent raw url=" + mediaUrl + ", encrypt=" + encrypt);
+        Log.d("YueGuang", "[YueGuang-DEBUG] playerContent raw url=" + mediaUrl + ", encrypt=" + encrypt);
 
         if (encrypt == 1 && !TextUtils.isEmpty(mediaUrl)) {
             mediaUrl = java.net.URLDecoder.decode(mediaUrl, "UTF-8");
         }
         mediaUrl = mediaUrl.replace("\\/", "/");
 
-        System.out.println("[YueGuang-DEBUG] playerContent final url=" + mediaUrl);
+        Log.d("YueGuang", "[YueGuang-DEBUG] playerContent final url=" + mediaUrl);
 
         boolean isM3u8 = mediaUrl.contains(".m3u8");
         boolean isMp4 = mediaUrl.contains(".mp4");

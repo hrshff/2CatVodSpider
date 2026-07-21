@@ -1,6 +1,7 @@
 package com.github.catvod.spider;
 
 import android.content.Context;
+import android.util.Log;
 import android.text.TextUtils;
 
 import com.github.catvod.bean.Class;
@@ -56,10 +57,10 @@ public class WanMei extends Spider {
     private String fetchWithRetry(String url) {
         String html = fetchWithRetry(url);
         if (!isValidHtml(html)) {
-            System.out.println("[WanMei-DEBUG] First fetch invalid, retrying: " + url);
+            Log.d("WanMei", "[WanMei-DEBUG] First fetch invalid, retrying: " + url);
             try { Thread.sleep(500); } catch (Exception ignored) {}
             html = fetch(url);
-            System.out.println("[WanMei-DEBUG] Retry result: len=" + (html != null ? html.length() : 0) + " valid=" + isValidHtml(html));
+            Log.d("WanMei", "[WanMei-DEBUG] Retry result: len=" + (html != null ? html.length() : 0) + " valid=" + isValidHtml(html));
         }
         return html;
     }
@@ -185,9 +186,9 @@ public class WanMei extends Spider {
             url = SITE_URL + "/htmlshow/" + tid + "--------" + page + "---.html";
         }
 
-        System.out.println("[WanMei-DEBUG] categoryContent url=" + url);
+        Log.d("WanMei", "[WanMei-DEBUG] categoryContent url=" + url);
         String html = fetchWithRetry(url);
-        System.out.println("[WanMei-DEBUG] categoryContent html valid=" + isValidHtml(html) + " len=" + (html != null ? html.length() : 0));
+        Log.d("WanMei", "[WanMei-DEBUG] categoryContent html valid=" + isValidHtml(html) + " len=" + (html != null ? html.length() : 0));
         Document doc = Jsoup.parse(html);
 
         Elements items = doc.select("a.media-content");
@@ -231,7 +232,7 @@ public class WanMei extends Spider {
         int pageCount = hasNext ? page + 1 : page;
         int total = hasNext ? 99999 : page * list.size();
 
-        System.out.println("[WanMei-DEBUG] categoryContent page=" + page + " items=" + list.size() + " hasNext=" + hasNext);
+        Log.d("WanMei", "[WanMei-DEBUG] categoryContent page=" + page + " items=" + list.size() + " hasNext=" + hasNext);
         return Result.get().vod(list).page(page, pageCount, 24, total).string();
     }
 

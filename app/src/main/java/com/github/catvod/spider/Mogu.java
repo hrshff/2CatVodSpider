@@ -1,6 +1,7 @@
 package com.github.catvod.spider;
 
 import android.content.Context;
+import android.util.Log;
 import android.text.TextUtils;
 
 import com.github.catvod.bean.Class;
@@ -114,7 +115,7 @@ public class Mogu extends Spider {
             url = SITE_URL + "/vodshow/" + tid + "--------" + page + "---.html";
         }
 
-        System.out.println("[Mogu-DEBUG] categoryContent url=" + url);
+        Log.d("Mogu", "[Mogu-DEBUG] categoryContent url=" + url);
         String html = fetch(url);
         Document doc = Jsoup.parse(html);
 
@@ -145,7 +146,7 @@ public class Mogu extends Spider {
         int pageCount = hasNext ? page + 1 : page;
         int total = hasNext ? 99999 : page * list.size();
 
-        System.out.println("[Mogu-DEBUG] categoryContent page=" + page + " items=" + list.size() + " hasNext=" + hasNext);
+        Log.d("Mogu", "[Mogu-DEBUG] categoryContent page=" + page + " items=" + list.size() + " hasNext=" + hasNext);
         return Result.get().vod(list).page(page, pageCount, 24, total).string();
     }
 
