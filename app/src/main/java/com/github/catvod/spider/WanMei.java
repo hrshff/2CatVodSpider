@@ -50,20 +50,7 @@ public class WanMei extends Spider {
         return SITE_URL + "/" + url;
     }
 
-    private boolean isValidHtml(String html) {
-        return html != null && html.length() > 3000 && html.contains("media-content");
-    }
 
-    private String fetchWithRetry(String url) {
-        String html = fetchWithRetry(url);
-        if (!isValidHtml(html)) {
-            Log.d("WanMei", "[WanMei-DEBUG] First fetch invalid, retrying: " + url);
-            try { Thread.sleep(500); } catch (Exception ignored) {}
-            html = fetch(url);
-            Log.d("WanMei", "[WanMei-DEBUG] Retry result: len=" + (html != null ? html.length() : 0) + " valid=" + isValidHtml(html));
-        }
-        return html;
-    }
 
     private String extractId(String url) {
         if (TextUtils.isEmpty(url)) return "";
@@ -186,58 +173,69 @@ public class WanMei extends Spider {
             url = SITE_URL + "/htmlshow/" + tid + "--------" + page + "---.html";
         }
 
-        Log.d("WanMei", "[WanMei-DEBUG] categoryContent url=" + url);
-        String html = fetchWithRetry(url);
-        Log.d("WanMei", "[WanMei-DEBUG] categoryContent html valid=" + isValidHtml(html) + " len=" + (html != null ? html.length() : 0));
-        Document doc = Jsoup.parse(html);
+        try {
+            String html = fetch(url);
+            if (TextUtils.isEmpty(html)) {
+                Log.d("WanMei", "[WanMei-DEBUG] fetch empty, url=" + url);
+                return Result.get().vod(list).page(page, page, 24, 0).string();
+            }
 
-        Elements items = doc.select("a.media-content");
-        for (Element item : items) {
-            String href = fixUrl(item.attr("href"));
-            String id = extractId(href);
-            if (TextUtils.isEmpty(id)) continue;
+            Log.d("WanMei", "[WanMei-DEBUG] fetch ok, url=" + url + " len=" + html.length());
+            Document doc = Jsoup.parse(html);
 
-            String title = "";
-            Element img = item.selectFirst("img");
-            if (img != null) title = img.attr("alt");
-            if (TextUtils.isEmpty(title)) {
-                Element parent = item.parent();
-                if (parent != null) {
-                    Element h3 = parent.selectFirst("h3 a");
-                    if (h3 != null) title = h3.text().trim();
+            Elements items = doc.select("a.media-content");
+            Log.d("WanMei", "[WanMei-DEBUG] items=" + items.size());
+
+            for (Element item : items) {
+                String href = fixUrl(item.attr("href"));
+                String id = extractId(href);
+                if (TextUtils.isEmpty(id)) continue;
+
+                String title = "";
+                Element img = item.selectFirst("img");
+                if (img != null) title = img.attr("alt");
+                if (TextUtils.isEmpty(title)) {
+                    Element parent = item.parent();
+                    if (parent != null) {
+                        Element h3 = parent.selectFirst("h3 a");
+                        if (h3 != null) title = h3.text().trim();
+                    }
                 }
+                if (TextUtils.isEmpty(title)) continue;
+
+                String pic = "";
+                if (img != null) {
+                    pic = img.attr("data-src");
+                    if (TextUtils.isEmpty(pic)) pic = img.attr("src");
+                }
+
+                String status = "";
+                Element note = item.selectFirst("span.position-absolute");
+                if (note != null) status = note.text().trim();
+
+                Vod vod = new Vod();
+                vod.setVodId(id);
+                vod.setVodName(title);
+                vod.setVodPic(fixUrl(pic));
+                vod.setVodRemarks(status);
+                list.add(vod);
             }
-            if (TextUtils.isEmpty(title)) continue;
 
-            String pic = "";
-            if (img != null) {
-                pic = img.attr("data-src");
-                if (TextUtils.isEmpty(pic)) pic = img.attr("src");
+            boolean hasNext = doc.select("a[href*=htmlshow]").size() > items.size() || list.size() >= 24;
+            int pageCount = hasNext ? page + 1 : page;
+            int total = hasNext ? 99999 : list.size();
+
+            if (!list.isEmpty()) {
+                list.get(0).setVodRemarks("url=" + url.replace(SITE_URL, "") + "|items=" + list.size() + "|hasNext=" + hasNext);
             }
 
-            String status = "";
-            Element note = item.selectFirst("span.position-absolute");
-            if (note != null) status = note.text().trim();
+            Log.d("WanMei", "[WanMei-DEBUG] return items=" + list.size() + " pageCount=" + pageCount);
+            return Result.get().vod(list).page(page, pageCount, 24, total).string();
 
-            Vod vod = new Vod();
-            vod.setVodId(id);
-            vod.setVodName(title);
-            vod.setVodPic(fixUrl(pic));
-            vod.setVodRemarks(status);
-            list.add(vod);
+        } catch (Exception e) {
+            Log.d("WanMei", "[WanMei-DEBUG] Exception: " + e.getClass().getSimpleName() + " " + e.getMessage());
+            return Result.get().vod(list).page(page, page, 24, 0).string();
         }
-
-        // 通过分页控件判断是否有下一页
-        boolean hasNext = doc.select(".page-link, .pagination a, .page-list a").size() > 1 || list.size() >= 24;
-        int pageCount = hasNext ? page + 1 : page;
-        int total = hasNext ? 99999 : page * list.size();
-
-        Log.d("WanMei", "[WanMei-DEBUG] categoryContent page=" + page + " items=" + list.size() + " hasNext=" + hasNext);
-        // 调试信息：放入第一个条目的备注中（如果列表不为空）
-        if (!list.isEmpty() && true) {
-            list.get(0).setVodRemarks("url=" + url.replace(SITE_URL, "") + "|items=" + list.size() + "|hasNext=" + hasNext);
-        }
-        return Result.get().vod(list).page(page, pageCount, 24, total).string();
     }
 
     @Override
@@ -429,7 +427,7 @@ public class WanMei extends Spider {
             url = url + "&page=" + page;
         }
 
-        String html = fetchWithRetry(url);
+        String html = fetch(url);
         Document doc = Jsoup.parse(html);
 
         Elements items = doc.select("a.media-content");
