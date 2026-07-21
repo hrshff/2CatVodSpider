@@ -167,7 +167,7 @@ public class YueGuang extends Spider {
                 String text = a.text();
                 if (text.contains("尾页") || text.contains("最后一页")) {
                     String href = a.attr("href");
-                    Matcher m = Pattern.compile("-(\d+)\.html").matcher(href);
+                    Matcher m = Pattern.compile("-(\\d+)\\.html").matcher(href);
                     if (m.find()) {
                         try {
                             pageCount = Integer.parseInt(m.group(1));
