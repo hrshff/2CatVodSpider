@@ -163,9 +163,9 @@ public class Mogu extends Spider {
 
         Element h1 = doc.selectFirst("h1");
         if (h1 != null) vod.setVodName(h1.text().trim());
-        if (TextUtils.isEmpty(vod.getVodName())) {
-            Element metaName = doc.selectFirst("meta[itemprop=name]");
-            if (metaName != null) vod.setVodName(metaName.attr("content"));
+        Element metaName = doc.selectFirst("meta[itemprop=name]");
+        if (metaName != null && !TextUtils.isEmpty(metaName.attr("content"))) {
+            vod.setVodName(metaName.attr("content"));
         }
 
         Element metaImg = doc.selectFirst("meta[itemprop=image]");

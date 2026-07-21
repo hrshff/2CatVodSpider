@@ -18,6 +18,7 @@ import org.jsoup.select.Elements;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -338,7 +339,7 @@ public class YueGuang extends Spider {
     }
 
     @Override
-    public Object[] proxy(HashMap<String, String> params) throws Exception {
+    public Object[] proxy(Map<String, String> params) throws Exception {
         String url = params.get("url");
         if (TextUtils.isEmpty(url)) {
             return new Object[]{404, "text/plain", new byte[0]};
