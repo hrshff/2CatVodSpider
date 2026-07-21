@@ -165,9 +165,9 @@ public class WanMei extends Spider {
 
         String url;
         if (page == 1) {
-            url = SITE_URL + "/list/" + tid + ".html";
+            url = SITE_URL + "/htmlshow/" + tid + ".html";
         } else {
-            url = SITE_URL + "/list/" + tid + "/index_" + page + ".html";
+            url = SITE_URL + "/htmlshow/" + tid + "--------" + page + "---.html";
         }
 
         System.out.println("[WanMei-DEBUG] categoryContent url=" + url);
