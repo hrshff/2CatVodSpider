@@ -397,10 +397,10 @@ public class YueGuang extends Spider {
             if (TextUtils.isEmpty(img)) {
                 String style = item.attr("style");
                 if (!TextUtils.isEmpty(style)) {
-                    Matcher m = Pattern.compile("background-image\s*:\s*url\(([^)]+)\)").matcher(style);
+                    Matcher m = Pattern.compile("background-image\\s*:\\s*url\\(([^)]+)\\)").matcher(style);
                     if (m.find()) {
                         img = m.group(1).trim();
-                        if ((img.startsWith(""") && img.endsWith(""")) ||
+                        if ((img.startsWith("\"") && img.endsWith("\"")) ||
                             (img.startsWith("'") && img.endsWith("'"))) {
                             img = img.substring(1, img.length() - 1);
                         }
