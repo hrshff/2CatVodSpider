@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 
 /**
  * 完美动漫 (www.wmdm.cc)
- * TVBox Java Spider - FongMi 规范版
+ * 修复：增加翻页诊断日志，修正 hasNext 与元数据计算
  */
 public class WanMei extends Spider {
 
@@ -79,12 +79,10 @@ public class WanMei extends Spider {
         String html = fetch(SITE_URL + "/");
         Document doc = Jsoup.parse(html);
 
-        // ========== 轮播图 ==========
         Elements slides = doc.select(".carousel-item");
         for (Element slide : slides) {
             Element link = slide.selectFirst("a.media-content");
             if (link == null) continue;
-
             String href = fixUrl(link.attr("href"));
             String id = extractId(href);
             if (TextUtils.isEmpty(id)) continue;
@@ -114,7 +112,6 @@ public class WanMei extends Spider {
             list.add(vod);
         }
 
-        // ========== 影片列表 ==========
         Elements items = doc.select("a.media-content");
         for (Element item : items) {
             String href = fixUrl(item.attr("href"));
@@ -145,7 +142,6 @@ public class WanMei extends Spider {
             if (note != null) status = note.text().trim();
 
             idSet.add(id);
-
             Vod vod = new Vod();
             vod.setVodId(id);
             vod.setVodName(title);
@@ -174,6 +170,7 @@ public class WanMei extends Spider {
             url = SITE_URL + "/list/" + tid + "/index_" + page + ".html";
         }
 
+        System.out.println("[WanMei-DEBUG] categoryContent url=" + url);
         String html = fetch(url);
         Document doc = Jsoup.parse(html);
 
@@ -213,10 +210,12 @@ public class WanMei extends Spider {
             list.add(vod);
         }
 
-        boolean hasNext = doc.select(".page-link, .pagination a, .stui-page a, .page-list a").size() > 0 || list.size() >= 24;
+        // 通过分页控件判断是否有下一页
+        boolean hasNext = doc.select(".page-link, .pagination a, .page-list a").size() > 1 || list.size() >= 24;
         int pageCount = hasNext ? page + 1 : page;
         int total = hasNext ? 99999 : page * list.size();
 
+        System.out.println("[WanMei-DEBUG] categoryContent page=" + page + " items=" + list.size() + " hasNext=" + hasNext);
         return Result.get().vod(list).page(page, pageCount, 24, total).string();
     }
 
@@ -235,7 +234,6 @@ public class WanMei extends Spider {
         Element h1 = doc.selectFirst("h1");
         if (h1 != null) vod.setVodName(h1.text().trim());
 
-        // 图片
         String pic = "";
         Element ogImg = doc.selectFirst("meta[property=og:image]");
         if (ogImg != null) {
@@ -253,7 +251,6 @@ public class WanMei extends Spider {
         }
         vod.setVodPic(fixUrl(pic));
 
-        // 信息字段
         String director = "";
         String actor = "";
         String typeName = "";
@@ -300,7 +297,6 @@ public class WanMei extends Spider {
         vod.setVodArea(area);
         vod.setVodYear(year);
 
-        // 简介
         Element descEl = doc.selectFirst("meta[name=description]");
         if (descEl != null) {
             String desc = descEl.attr("content");
@@ -310,7 +306,6 @@ public class WanMei extends Spider {
             vod.setVodContent(desc.trim());
         }
 
-        // 播放源
         List<String> playFroms = new ArrayList<>();
         List<String> playUrls = new ArrayList<>();
 
@@ -361,7 +356,6 @@ public class WanMei extends Spider {
         String html = fetch(playUrl);
         Document doc = Jsoup.parse(html);
 
-        // 直链在 .video-iframe 的 data-play 属性
         String url = "";
         Element playerDiv = doc.selectFirst(".video-iframe");
         if (playerDiv != null) {
@@ -372,7 +366,6 @@ public class WanMei extends Spider {
         header.put("Origin", SITE_URL);
         header.put("Referer", playUrl);
 
-        // YZ节点(yzzy)有防盗链，必须走播放页webview解析
         if (flag.contains("YZ") || flag.contains("yz")) {
             return Result.get().url(playUrl).parse(1).header(header).string();
         }
@@ -385,7 +378,6 @@ public class WanMei extends Spider {
             }
         }
 
-        // iframe 回退
         Element iframe = doc.selectFirst("iframe");
         if (iframe != null) {
             String src = fixUrl(iframe.attr("src"));
@@ -453,7 +445,7 @@ public class WanMei extends Spider {
             list.add(vod);
         }
 
-        boolean hasNext = doc.select(".page-link, .pagination a, .stui-page a, .page-list a").size() > 0 || list.size() >= 24;
+        boolean hasNext = doc.select(".page-link, .pagination a, .page-list a").size() > 0 || list.size() >= 24;
         int pageCount = hasNext ? page + 1 : page;
         int total = list.isEmpty() ? 0 : list.size();
 
