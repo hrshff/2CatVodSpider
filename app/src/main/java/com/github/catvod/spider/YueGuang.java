@@ -147,6 +147,7 @@ public class YueGuang extends Spider {
         List<Vod> list = parseVodList(doc);
 
         // 从分页控件提取真实总页数
+        boolean hasNext = doc.select(".stui-page, .page, .page-link, .pagination, .fed-page-info").size() > 0 || list.size() >= 24;
         int pageCount = hasNext ? page + 1 : page;
         int total = hasNext ? 99999 : page * list.size();
 

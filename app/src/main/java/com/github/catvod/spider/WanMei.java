@@ -186,8 +186,8 @@ public class WanMei extends Spider {
         }
 
         System.out.println("[WanMei-DEBUG] categoryContent url=" + url);
-        System.out.println("[WanMei-DEBUG] categoryContent html valid=" + isValidHtml(html) + " len=" + (html != null ? html.length() : 0));
         String html = fetchWithRetry(url);
+        System.out.println("[WanMei-DEBUG] categoryContent html valid=" + isValidHtml(html) + " len=" + (html != null ? html.length() : 0));
         Document doc = Jsoup.parse(html);
 
         Elements items = doc.select("a.media-content");
