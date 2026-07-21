@@ -99,13 +99,13 @@ public class Mogu extends Spider {
         Document doc = Jsoup.parse(html);
         JSONArray list = parsePosterItems(doc);
 
-        boolean hasNext = doc.select(".module-paper-item").size() > 0 || list.length() >= 24;
+        boolean hasNext = doc.select(".module-poster-item").size() > 0 || list.length() >= 24;
 
         JSONObject result = new JSONObject();
         result.put("page", page);
         result.put("pagecount", hasNext ? page + 1 : page);
         result.put("limit", 24);
-        result.put("total", list.length() > 0 ? page * 24 + 1 : 0);
+        result.put("total", hasNext ? 99999 : page * list.length());
         result.put("list", list);
 
         return result.toString();
@@ -313,7 +313,7 @@ public class Mogu extends Spider {
         Document doc = Jsoup.parse(html);
         JSONArray list = parseSearchItems(doc);
 
-        boolean hasNext = doc.select(".module-paper-item").size() > 0 || list.length() >= 24;
+        boolean hasNext = doc.select(".module-poster-item").size() > 0 || list.length() >= 24;
 
         JSONObject result = new JSONObject();
         result.put("page", page);

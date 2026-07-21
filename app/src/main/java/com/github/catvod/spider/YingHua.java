@@ -198,7 +198,7 @@ public class YingHua extends Spider {
 
         boolean hasNext = doc.select(".page-link").size() > 1 || list.size() >= 24;
         int pageCount = hasNext ? page + 1 : page;
-        int total = list.size() > 0 ? page * 24 + 1 : 0;
+        int total = hasNext ? 99999 : page * list.size();
 
         return Result.get().vod(list).page(page, pageCount, 24, total).string();
     }

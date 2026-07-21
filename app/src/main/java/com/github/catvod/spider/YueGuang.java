@@ -168,13 +168,13 @@ public class YueGuang extends Spider {
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
-        boolean hasNext = doc.select(".stui-page, .page").size() > 0;
+        boolean hasNext = doc.select(".stui-page, .page, .page-link, .pagination, .fed-page-info").size() > 0 || list.length() >= 24;
 
         JSONObject result = new JSONObject();
         result.put("page", page);
         result.put("pagecount", hasNext ? page + 1 : page);
         result.put("limit", 24);
-        result.put("total", list.length() > 0 ? page * 24 + 1 : 0);
+        result.put("total", hasNext ? 99999 : page * list.length());
         result.put("list", list);
 
         return result.toString();
@@ -371,7 +371,7 @@ public class YueGuang extends Spider {
         Document doc = Jsoup.parse(html);
         JSONArray list = parseVodList(doc);
 
-        boolean hasNext = doc.select(".stui-page, .page").size() > 0;
+        boolean hasNext = doc.select(".stui-page, .page, .page-link, .pagination, .fed-page-info").size() > 0 || list.length() >= 24;
 
         JSONObject result = new JSONObject();
         result.put("page", 1);
