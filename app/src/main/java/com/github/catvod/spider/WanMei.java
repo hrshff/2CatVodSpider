@@ -475,7 +475,7 @@ public class WanMei extends Spider {
         int total = list.isEmpty() ? 0 : list.size();
 
         // 调试信息：放入第一个条目的备注中（如果列表不为空）
-        if (!list.isEmpty() && true) {
+        if (!list.isEmpty()) {
             list.get(0).setVodRemarks("url=" + url.replace(SITE_URL, "") + "|items=" + list.size() + "|hasNext=" + hasNext);
         }
         return Result.get().vod(list).page(page, pageCount, 24, total).string();

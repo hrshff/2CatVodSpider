@@ -199,7 +199,7 @@ public class YueGuang extends Spider {
 
         Log.d("YueGuang", "[YueGuang-DEBUG] categoryContent page=" + page + " items=" + list.size() + " pageCount=" + pageCount + " total=" + total + " limit=" + limit);
         // 调试信息：放入第一个条目的备注中
-        if (!list.isEmpty() && true) {
+        if (!list.isEmpty()) {
             list.get(0).setVodRemarks("items=" + list.size() + "|pageCount=" + pageCount + "|limit=" + limit);
         }
         try {

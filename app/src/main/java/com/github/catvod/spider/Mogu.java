@@ -153,7 +153,7 @@ public class Mogu extends Spider {
 
         Log.d("Mogu", "[Mogu-DEBUG] categoryContent page=" + page + " items=" + list.size() + " hasNext=" + hasNext);
         // 调试信息：放入第一个条目的备注中
-        if (!list.isEmpty() && true) {
+        if (!list.isEmpty()) {
             list.get(0).setVodRemarks("items=" + list.size() + "|hasNext=" + hasNext);
         }
         try {
@@ -347,14 +347,14 @@ public class Mogu extends Spider {
         int total = list.isEmpty() ? 0 : list.size();
 
         // 调试信息：放入第一个条目的备注中
-        if (!list.isEmpty() && true) {
+        if (!list.isEmpty()) {
             list.get(0).setVodRemarks("items=" + list.size() + "|hasNext=" + hasNext);
         }
         try {
             return Result.get().vod(list).page(page, pageCount, 24, total).string();
         } catch (Exception e) {
             Log.d("Mogu", "[Mogu] Exception: " + e.getMessage());
-            throw new Exception("[Mogu] 分类获取失败: tid=" + tid + ", page=" + page + ", 原因=" + e.getMessage(), e);
+            throw new Exception("[Mogu] 搜索获取失败: key=" + key + ", page=" + page + ", 原因=" + e.getMessage(), e);
         }
     }
 }
