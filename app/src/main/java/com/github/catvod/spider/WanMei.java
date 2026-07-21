@@ -233,6 +233,10 @@ public class WanMei extends Spider {
         int total = hasNext ? 99999 : page * list.size();
 
         Log.d("WanMei", "[WanMei-DEBUG] categoryContent page=" + page + " items=" + list.size() + " hasNext=" + hasNext);
+        // 调试信息：放入第一个条目的备注中（如果列表不为空）
+        if (!list.isEmpty() && true) {
+            list.get(0).setVodRemarks("url=" + url.replace(SITE_URL, "") + "|items=" + list.size() + "|hasNext=" + hasNext);
+        }
         return Result.get().vod(list).page(page, pageCount, 24, total).string();
     }
 
@@ -466,6 +470,10 @@ public class WanMei extends Spider {
         int pageCount = hasNext ? page + 1 : page;
         int total = list.isEmpty() ? 0 : list.size();
 
+        // 调试信息：放入第一个条目的备注中（如果列表不为空）
+        if (!list.isEmpty() && true) {
+            list.get(0).setVodRemarks("url=" + url.replace(SITE_URL, "") + "|items=" + list.size() + "|hasNext=" + hasNext);
+        }
         return Result.get().vod(list).page(page, pageCount, 24, total).string();
     }
 }

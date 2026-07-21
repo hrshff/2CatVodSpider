@@ -200,6 +200,10 @@ public class YingHua extends Spider {
         int pageCount = hasNext ? page + 1 : page;
         int total = hasNext ? 99999 : page * list.size();
 
+        // 调试信息：放入第一个条目的备注中
+        if (!list.isEmpty()) {
+            list.get(0).setVodRemarks("YingHua_test|items=" + list.size() + "|page=" + page + "|pageCount=" + pageCount);
+        }
         return Result.get().vod(list).page(page, pageCount, 24, total).string();
     }
 
@@ -413,6 +417,10 @@ public class YingHua extends Spider {
         int pageCount = hasNext ? page + 1 : page;
         int total = list.isEmpty() ? 0 : list.size();
 
+        // 调试信息：放入第一个条目的备注中
+        if (!list.isEmpty()) {
+            list.get(0).setVodRemarks("YingHua_test|items=" + list.size() + "|page=" + page + "|pageCount=" + pageCount);
+        }
         return Result.get().vod(list).page(page, pageCount, 24, total).string();
     }
 }

@@ -147,6 +147,10 @@ public class Mogu extends Spider {
         int total = hasNext ? 99999 : page * list.size();
 
         Log.d("Mogu", "[Mogu-DEBUG] categoryContent page=" + page + " items=" + list.size() + " hasNext=" + hasNext);
+        // 调试信息：放入第一个条目的备注中
+        if (!list.isEmpty() && true) {
+            list.get(0).setVodRemarks("items=" + list.size() + "|hasNext=" + hasNext);
+        }
         return Result.get().vod(list).page(page, pageCount, 24, total).string();
     }
 
@@ -332,6 +336,10 @@ public class Mogu extends Spider {
         int pageCount = hasNext ? page + 1 : page;
         int total = list.isEmpty() ? 0 : list.size();
 
+        // 调试信息：放入第一个条目的备注中
+        if (!list.isEmpty() && true) {
+            list.get(0).setVodRemarks("items=" + list.size() + "|hasNext=" + hasNext);
+        }
         return Result.get().vod(list).page(page, pageCount, 24, total).string();
     }
 }
