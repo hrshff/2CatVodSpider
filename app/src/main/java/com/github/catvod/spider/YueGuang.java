@@ -146,12 +146,52 @@ public class YueGuang extends Spider {
         Document doc = Jsoup.parse(html);
         List<Vod> list = parseVodList(doc);
 
-        boolean hasNext = doc.select(".stui-page, .page, .page-link, .pagination, .fed-page-info").size() > 0 || list.size() >= 24;
+        // 从分页控件提取真实总页数
         int pageCount = hasNext ? page + 1 : page;
         int total = hasNext ? 99999 : page * list.size();
 
-        System.out.println("[YueGuang-DEBUG] categoryContent page=" + page + " items=" + list.size() + " hasNext=" + hasNext);
-        return Result.get().vod(list).page(page, pageCount, 24, total).string();
+        Element numEl = doc.selectFirst(".stui-page .num");
+        if (numEl != null) {
+            String text = numEl.text(); // e.g. "2/2812"
+            String[] arr = text.split("/");
+            if (arr.length == 2) {
+                try {
+                    pageCount = Integer.parseInt(arr[1].trim());
+                    total = pageCount * Math.max(list.size(), 1);
+                } catch (Exception ignored) {}
+            }
+        } else {
+            // 从尾页链接提取（备用）
+            Elements pageLinks = doc.select(".stui-page a");
+            for (Element a : pageLinks) {
+                String text = a.text();
+                if (text.contains("尾页") || text.contains("最后一页")) {
+                    String href = a.attr("href");
+                    Matcher m = Pattern.compile("-(\d+)\.html").matcher(href);
+                    if (m.find()) {
+                        try {
+                            pageCount = Integer.parseInt(m.group(1));
+                            total = pageCount * Math.max(list.size(), 1);
+                        } catch (Exception ignored) {}
+                    }
+                    break;
+                }
+            }
+        }
+
+        // 如果无法提取，保持原有逻辑
+        if (pageCount <= page) {
+            pageCount = hasNext ? page + 1 : page;
+        }
+        if (total <= 0) {
+            total = hasNext ? 99999 : page * list.size();
+        }
+
+        // limit 使用实际列表大小（月光每页固定20项）
+        int limit = list.size() > 0 ? list.size() : 24;
+
+        System.out.println("[YueGuang-DEBUG] categoryContent page=" + page + " items=" + list.size() + " pageCount=" + pageCount + " total=" + total + " limit=" + limit);
+        return Result.get().vod(list).page(page, pageCount, limit, total).string();
     }
 
     @Override
@@ -334,8 +374,9 @@ public class YueGuang extends Spider {
         boolean hasNext = doc.select(".stui-page, .page, .page-link, .pagination, .fed-page-info").size() > 0 || vodList.size() >= 24;
         int pageCount = hasNext ? page + 1 : page;
         int total = vodList.size();
+        int limit = vodList.size() > 0 ? vodList.size() : 24;
 
-        return Result.get().vod(vodList).page(page, pageCount, 24, total).string();
+        return Result.get().vod(vodList).page(page, pageCount, limit, total).string();
     }
 
     @Override

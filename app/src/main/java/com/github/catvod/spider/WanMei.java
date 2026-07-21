@@ -49,6 +49,21 @@ public class WanMei extends Spider {
         return SITE_URL + "/" + url;
     }
 
+    private boolean isValidHtml(String html) {
+        return html != null && html.length() > 3000 && html.contains("media-content");
+    }
+
+    private String fetchWithRetry(String url) {
+        String html = fetchWithRetry(url);
+        if (!isValidHtml(html)) {
+            System.out.println("[WanMei-DEBUG] First fetch invalid, retrying: " + url);
+            try { Thread.sleep(500); } catch (Exception ignored) {}
+            html = fetch(url);
+            System.out.println("[WanMei-DEBUG] Retry result: len=" + (html != null ? html.length() : 0) + " valid=" + isValidHtml(html));
+        }
+        return html;
+    }
+
     private String extractId(String url) {
         if (TextUtils.isEmpty(url)) return "";
         Matcher m = Pattern.compile("/content/(\\d+)\\.html").matcher(url);
@@ -171,7 +186,8 @@ public class WanMei extends Spider {
         }
 
         System.out.println("[WanMei-DEBUG] categoryContent url=" + url);
-        String html = fetch(url);
+        System.out.println("[WanMei-DEBUG] categoryContent html valid=" + isValidHtml(html) + " len=" + (html != null ? html.length() : 0));
+        String html = fetchWithRetry(url);
         Document doc = Jsoup.parse(html);
 
         Elements items = doc.select("a.media-content");
@@ -408,7 +424,7 @@ public class WanMei extends Spider {
             url = url + "&page=" + page;
         }
 
-        String html = fetch(url);
+        String html = fetchWithRetry(url);
         Document doc = Jsoup.parse(html);
 
         Elements items = doc.select("a.media-content");
