@@ -1,7 +1,7 @@
 package com.github.catvod.spider;
 
 import android.content.Context;
-import android.util.Log;
+import com.github.catvod.utils.Logger;
 import android.text.TextUtils;
 
 import com.github.catvod.bean.Class;
@@ -72,7 +72,7 @@ public class YueGuang extends Spider {
     }
 
     private String fetch(String url, String referer) throws Exception {
-        Log.d("YueGuang", "[YueGuang] HTTP Request: " + url);
+        Logger.log("DEBUG", "[YueGuang] HTTP Request: " + url);
         long start = System.currentTimeMillis();
         Request request = new Request.Builder()
             .url(url)
@@ -82,7 +82,7 @@ public class YueGuang extends Spider {
         try (Response response = client().newCall(request).execute()) {
             String html = response.body() != null ? response.body().string() : "";
             long cost = System.currentTimeMillis() - start;
-            Log.d("YueGuang", "[YueGuang] HTTP Response: code=" + response.code() + " len=" + html.length() + " cost=" + cost + "ms");
+            Logger.log("DEBUG", "[YueGuang] HTTP Response: code=" + response.code() + " len=" + html.length() + " cost=" + cost + "ms");
             return html;
         }
     }
@@ -106,6 +106,7 @@ public class YueGuang extends Spider {
 
     @Override
     public String homeContent(boolean filter) throws Exception {
+        Logger.log("DEBUG", "[YueGuang-homeContent] start");
         List<Class> classes = new ArrayList<>();
         classes.add(new Class("1", "电影"));
         classes.add(new Class("2", "电视剧"));
@@ -117,6 +118,7 @@ public class YueGuang extends Spider {
 
     @Override
     public String homeVideoContent() throws Exception {
+        Logger.log("DEBUG", "[YueGuang-homeVideoContent] start");
         String html = fetch(SITE_URL, null);
         Document doc = Jsoup.parse(html);
         List<Vod> list = parseVodList(doc);
@@ -125,6 +127,7 @@ public class YueGuang extends Spider {
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
+        Logger.log("DEBUG", "[YueGuang-categoryContent] start");
         int page;
         try {
             page = Integer.parseInt(pg);
@@ -136,11 +139,11 @@ public class YueGuang extends Spider {
             ? SITE_URL + "/zwhstp/" + tid + ".html"
             : SITE_URL + "/zwhstp/" + tid + "-" + page + ".html";
 
-        Log.d("YueGuang", "[YueGuang-DEBUG] categoryContent url=" + url);
+        Logger.log("DEBUG", "[YueGuang-DEBUG] categoryContent url=" + url);
         String html = fetch(url, SITE_URL + "/");
 
         if (!isValidHtml(html)) {
-            Log.d("YueGuang", "[YueGuang-DEBUG] categoryContent INVALID html, fallback to home");
+            Logger.log("DEBUG", "[YueGuang-DEBUG] categoryContent INVALID html, fallback to home");
             String homeHtml = fetch(SITE_URL, null);
             if (isValidHtml(homeHtml)) {
                 Document homeDoc = Jsoup.parse(homeHtml);
@@ -197,7 +200,7 @@ public class YueGuang extends Spider {
         // limit 使用实际列表大小（月光每页固定20项）
         int limit = list.size() > 0 ? list.size() : 24;
 
-        Log.d("YueGuang", "[YueGuang-DEBUG] categoryContent page=" + page + " items=" + list.size() + " pageCount=" + pageCount + " total=" + total + " limit=" + limit);
+        Logger.log("DEBUG", "[YueGuang-DEBUG] categoryContent page=" + page + " items=" + list.size() + " pageCount=" + pageCount + " total=" + total + " limit=" + limit);
         // 调试信息：放入第一个条目的备注中
         if (!list.isEmpty()) {
             list.get(0).setVodRemarks("items=" + list.size() + "|pageCount=" + pageCount + "|limit=" + limit);
@@ -205,13 +208,14 @@ public class YueGuang extends Spider {
         try {
             return Result.get().vod(list).page(page, pageCount, limit, total).string();
         } catch (Exception e) {
-            Log.d("YueGuang", "[YueGuang] Exception: " + e.getMessage());
+            Logger.log("DEBUG", "[YueGuang] Exception: " + e.getMessage());
             throw new Exception("[YueGuang] 分类获取失败: tid=" + tid + ", page=" + page + ", 原因=" + e.getMessage(), e);
         }
     }
 
     @Override
     public String detailContent(List<String> ids) throws Exception {
+        Logger.log("DEBUG", "[YueGuang-detailContent] start");
         if (ids == null || ids.isEmpty()) return "";
         String id = ids.get(0);
         if (TextUtils.isEmpty(id)) return "";
@@ -307,52 +311,53 @@ public class YueGuang extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
+        Logger.log("DEBUG", "[YueGuang-playerContent] start");
         if (TextUtils.isEmpty(id)) {
             return Result.get().url("").string();
         }
 
-        Log.d("YueGuang", "[YueGuang-DEBUG] playerContent start, id=" + id + ", flag=" + flag);
+        Logger.log("DEBUG", "[YueGuang-DEBUG] playerContent start, id=" + id + ", flag=" + flag);
 
         String html = fetch(id, SITE_URL + "/zwhsdt/1.html");
         String preview = html.length() > 200 ? html.substring(0, 200) : html;
-        Log.d("YueGuang", "[YueGuang-DEBUG] playerContent html len=" + html.length() + " preview=" + preview.replace("\n", " "));
+        Logger.log("DEBUG", "[YueGuang-DEBUG] playerContent html len=" + html.length() + " preview=" + preview.replace("\n", " "));
 
         if (!isValidHtml(html)) {
-            Log.d("YueGuang", "[YueGuang-DEBUG] playerContent INVALID html");
+            Logger.log("DEBUG", "[YueGuang-DEBUG] playerContent INVALID html");
             return Result.get().url("").string();
         }
 
         Matcher mp = Pattern.compile("var\\s+player_\\w+\\s*=\\s*(\\{.*?\\})\\s*</script>", Pattern.DOTALL).matcher(html);
         boolean found = mp.find();
-        Log.d("YueGuang", "[YueGuang-DEBUG] playerContent primary regex found=" + found);
+        Logger.log("DEBUG", "[YueGuang-DEBUG] playerContent primary regex found=" + found);
 
         if (!found) {
             mp = Pattern.compile("var\\s+player_\\w+\\s*=\\s*(\\{.*?\\})(?:;|\\s*<|\\s*$)", Pattern.DOTALL).matcher(html);
             found = mp.find();
-            Log.d("YueGuang", "[YueGuang-DEBUG] playerContent fallback regex found=" + found);
+            Logger.log("DEBUG", "[YueGuang-DEBUG] playerContent fallback regex found=" + found);
         }
 
         if (!found) {
-            Log.d("YueGuang", "[YueGuang-DEBUG] playerContent NO MATCH");
+            Logger.log("DEBUG", "[YueGuang-DEBUG] playerContent NO MATCH");
             return Result.get().url("").string();
         }
 
         String playerStr = mp.group(1);
-        Log.d("YueGuang", "[YueGuang-DEBUG] playerContent matched=" + playerStr.substring(0, Math.min(200, playerStr.length())));
+        Logger.log("DEBUG", "[YueGuang-DEBUG] playerContent matched=" + playerStr.substring(0, Math.min(200, playerStr.length())));
 
         Matcher mu = Pattern.compile("\\\"url\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"").matcher(playerStr);
         String mediaUrl = mu.find() ? mu.group(1) : "";
         Matcher me = Pattern.compile("\\\"encrypt\\\"\\s*:\\s*(\\d+)").matcher(playerStr);
         int encrypt = me.find() ? Integer.parseInt(me.group(1)) : 0;
 
-        Log.d("YueGuang", "[YueGuang-DEBUG] playerContent raw url=" + mediaUrl + ", encrypt=" + encrypt);
+        Logger.log("DEBUG", "[YueGuang-DEBUG] playerContent raw url=" + mediaUrl + ", encrypt=" + encrypt);
 
         if (encrypt == 1 && !TextUtils.isEmpty(mediaUrl)) {
             mediaUrl = java.net.URLDecoder.decode(mediaUrl, "UTF-8");
         }
         mediaUrl = mediaUrl.replace("\\/", "/");
 
-        Log.d("YueGuang", "[YueGuang-DEBUG] playerContent final url=" + mediaUrl);
+        Logger.log("DEBUG", "[YueGuang-DEBUG] playerContent final url=" + mediaUrl);
 
         boolean isM3u8 = mediaUrl.contains(".m3u8");
         boolean isMp4 = mediaUrl.contains(".mp4");
@@ -367,6 +372,7 @@ public class YueGuang extends Spider {
 
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
+        Logger.log("DEBUG", "[YueGuang-searchContent] start");
         return searchContent(key, quick, "1");
     }
 

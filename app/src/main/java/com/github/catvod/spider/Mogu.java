@@ -1,7 +1,7 @@
 package com.github.catvod.spider;
 
 import android.content.Context;
-import android.util.Log;
+import com.github.catvod.utils.Logger;
 import android.text.TextUtils;
 
 import com.github.catvod.bean.Class;
@@ -39,11 +39,11 @@ public class Mogu extends Spider {
     }
 
     private String fetch(String url) {
-        Log.d("Mogu", "[Mogu] HTTP Request: " + url);
+        Logger.log("DEBUG", "[Mogu] HTTP Request: " + url);
         long start = System.currentTimeMillis();
         String html = OkHttp.string(url, getHeaders());
         long cost = System.currentTimeMillis() - start;
-        Log.d("Mogu", "[Mogu] HTTP Response: len=" + (html != null ? html.length() : 0) + " cost=" + cost + "ms");
+        Logger.log("DEBUG", "[Mogu] HTTP Response: len=" + (html != null ? html.length() : 0) + " cost=" + cost + "ms");
         return html;
     }
 
@@ -62,6 +62,7 @@ public class Mogu extends Spider {
 
     @Override
     public String homeContent(boolean filter) throws Exception {
+        Logger.log("DEBUG", "[Mogu-homeContent] start");
         List<Class> classes = new ArrayList<>();
         classes.add(new Class("20", "电影"));
         classes.add(new Class("35", "连续剧"));
@@ -75,6 +76,7 @@ public class Mogu extends Spider {
 
     @Override
     public String homeVideoContent() throws Exception {
+        Logger.log("DEBUG", "[Mogu-homeVideoContent] start");
         List<Vod> list = new ArrayList<>();
         String html = fetch(SITE_URL);
         Document doc = Jsoup.parse(html);
@@ -104,6 +106,7 @@ public class Mogu extends Spider {
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
+        Logger.log("DEBUG", "[Mogu-categoryContent] start");
         List<Vod> list = new ArrayList<>();
         int page;
         try {
@@ -120,7 +123,7 @@ public class Mogu extends Spider {
             url = SITE_URL + "/vodshow/" + tid + "--------" + page + "---.html";
         }
 
-        Log.d("Mogu", "[Mogu-DEBUG] categoryContent url=" + url);
+        Logger.log("DEBUG", "[Mogu-DEBUG] categoryContent url=" + url);
         String html = fetch(url);
         Document doc = Jsoup.parse(html);
 
@@ -151,7 +154,7 @@ public class Mogu extends Spider {
         int pageCount = hasNext ? page + 1 : page;
         int total = hasNext ? 99999 : page * list.size();
 
-        Log.d("Mogu", "[Mogu-DEBUG] categoryContent page=" + page + " items=" + list.size() + " hasNext=" + hasNext);
+        Logger.log("DEBUG", "[Mogu-DEBUG] categoryContent page=" + page + " items=" + list.size() + " hasNext=" + hasNext);
         // 调试信息：放入第一个条目的备注中
         if (!list.isEmpty()) {
             list.get(0).setVodRemarks("items=" + list.size() + "|hasNext=" + hasNext);
@@ -159,13 +162,14 @@ public class Mogu extends Spider {
         try {
             return Result.get().vod(list).page(page, pageCount, 24, total).string();
         } catch (Exception e) {
-            Log.d("Mogu", "[Mogu] Exception: " + e.getMessage());
+            Logger.log("DEBUG", "[Mogu] Exception: " + e.getMessage());
             throw new Exception("[Mogu] 分类获取失败: tid=" + tid + ", page=" + page + ", 原因=" + e.getMessage(), e);
         }
     }
 
     @Override
     public String detailContent(List<String> ids) throws Exception {
+        Logger.log("DEBUG", "[Mogu-detailContent] start");
         if (ids == null || ids.isEmpty()) return "";
         String id = ids.get(0);
         if (TextUtils.isEmpty(id)) return "";
@@ -249,6 +253,7 @@ public class Mogu extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
+        Logger.log("DEBUG", "[Mogu-playerContent] start");
         if (TextUtils.isEmpty(id)) {
             return Result.get().url("").string();
         }
@@ -286,6 +291,7 @@ public class Mogu extends Spider {
 
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
+        Logger.log("DEBUG", "[Mogu-searchContent] start");
         return searchContent(key, quick, "1");
     }
 
@@ -353,7 +359,7 @@ public class Mogu extends Spider {
         try {
             return Result.get().vod(list).page(page, pageCount, 24, total).string();
         } catch (Exception e) {
-            Log.d("Mogu", "[Mogu] Exception: " + e.getMessage());
+            Logger.log("DEBUG", "[Mogu] Exception: " + e.getMessage());
             throw new Exception("[Mogu] 搜索获取失败: key=" + key + ", page=" + page + ", 原因=" + e.getMessage(), e);
         }
     }

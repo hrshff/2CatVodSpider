@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import com.github.catvod.utils.Logger;
 
 public class YingHua extends Spider {
 
@@ -34,7 +35,12 @@ public class YingHua extends Spider {
     }
 
     private String fetch(String url) {
-        return OkHttp.string(url, getHeaders());
+        Logger.log("DEBUG", "[YingHua] HTTP Request: " + url);
+        long start = System.currentTimeMillis();
+        String html = OkHttp.string(url, getHeaders());
+        long cost = System.currentTimeMillis() - start;
+        Logger.log("DEBUG", "[YingHua] HTTP Response: len=" + (html != null ? html.length() : 0) + " cost=" + cost + "ms");
+        return html;
     }
 
     private String fixUrl(String url) {
@@ -61,6 +67,7 @@ public class YingHua extends Spider {
 
     @Override
     public String homeContent(boolean filter) throws Exception {
+        Logger.log("DEBUG", "[YingHua-homeContent] start");
         List<Class> classes = new ArrayList<>();
         classes.add(new Class("10", "日本动漫"));
         classes.add(new Class("9", "国产动漫"));
@@ -71,6 +78,7 @@ public class YingHua extends Spider {
 
     @Override
     public String homeVideoContent() throws Exception {
+        Logger.log("DEBUG", "[YingHua-homeVideoContent] start");
         List<Vod> list = new ArrayList<>();
         HashSet<String> idSet = new HashSet<>();
 
@@ -152,6 +160,7 @@ public class YingHua extends Spider {
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
+        Logger.log("DEBUG", "[YingHua-categoryContent] start");
         List<Vod> list = new ArrayList<>();
         int page;
         try {
@@ -209,6 +218,7 @@ public class YingHua extends Spider {
 
     @Override
     public String detailContent(List<String> ids) throws Exception {
+        Logger.log("DEBUG", "[YingHua-detailContent] start");
         if (ids == null || ids.isEmpty()) return "";
         String id = ids.get(0);
 
@@ -286,6 +296,7 @@ public class YingHua extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
+        Logger.log("DEBUG", "[YingHua-playerContent] start");
         if (TextUtils.isEmpty(id)) {
             return Result.get().url("").string();
         }
@@ -342,6 +353,7 @@ public class YingHua extends Spider {
 
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
+        Logger.log("DEBUG", "[YingHua-searchContent] start");
         return searchContent(key, quick, "1");
     }
 

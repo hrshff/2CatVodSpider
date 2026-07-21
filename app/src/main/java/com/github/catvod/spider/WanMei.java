@@ -1,7 +1,7 @@
 package com.github.catvod.spider;
 
 import android.content.Context;
-import android.util.Log;
+import com.github.catvod.utils.Logger;
 import android.text.TextUtils;
 
 import com.github.catvod.bean.Class;
@@ -39,11 +39,11 @@ public class WanMei extends Spider {
     }
 
     private String fetch(String url) {
-        Log.d("WanMei", "[WanMei] HTTP Request: " + url);
+        Logger.log("DEBUG", "[WanMei] HTTP Request: " + url);
         long start = System.currentTimeMillis();
         String html = OkHttp.string(url, getHeaders());
         long cost = System.currentTimeMillis() - start;
-        Log.d("WanMei", "[WanMei] HTTP Response: code=200 len=" + (html != null ? html.length() : 0) + " cost=" + cost + "ms");
+        Logger.log("DEBUG", "[WanMei] HTTP Response: code=200 len=" + (html != null ? html.length() : 0) + " cost=" + cost + "ms");
         return html;
     }
 
@@ -71,6 +71,7 @@ public class WanMei extends Spider {
 
     @Override
     public String homeContent(boolean filter) throws Exception {
+        Logger.log("DEBUG", "[WanMei-homeContent] start");
         List<Class> classes = new ArrayList<>();
         classes.add(new Class("20", "国产动漫"));
         classes.add(new Class("21", "日韩动漫"));
@@ -81,6 +82,7 @@ public class WanMei extends Spider {
 
     @Override
     public String homeVideoContent() throws Exception {
+        Logger.log("DEBUG", "[WanMei-homeVideoContent] start");
         List<Vod> list = new ArrayList<>();
         HashSet<String> idSet = new HashSet<>();
 
@@ -163,6 +165,7 @@ public class WanMei extends Spider {
 
     @Override
     public String categoryContent(String tid, String pg, boolean filter, HashMap<String, String> extend) throws Exception {
+        Logger.log("DEBUG", "[WanMei-categoryContent] start");
         List<Vod> list = new ArrayList<>();
         int page;
         try {
@@ -181,15 +184,15 @@ public class WanMei extends Spider {
         try {
             String html = fetch(url);
             if (TextUtils.isEmpty(html)) {
-                Log.d("WanMei", "[WanMei-DEBUG] fetch empty, url=" + url);
+                Logger.log("DEBUG", "[WanMei-DEBUG] fetch empty, url=" + url);
                 return Result.get().vod(list).page(page, page, 24, 0).string();
             }
 
-            Log.d("WanMei", "[WanMei-DEBUG] fetch ok, url=" + url + " len=" + html.length());
+            Logger.log("DEBUG", "[WanMei-DEBUG] fetch ok, url=" + url + " len=" + html.length());
             Document doc = Jsoup.parse(html);
 
             Elements items = doc.select("a.media-content");
-            Log.d("WanMei", "[WanMei-DEBUG] items=" + items.size());
+            Logger.log("DEBUG", "[WanMei-DEBUG] items=" + items.size());
 
             for (Element item : items) {
                 String href = fixUrl(item.attr("href"));
@@ -234,11 +237,11 @@ public class WanMei extends Spider {
                 list.get(0).setVodRemarks("url=" + url.replace(SITE_URL, "") + "|items=" + list.size() + "|hasNext=" + hasNext);
             }
 
-            Log.d("WanMei", "[WanMei-DEBUG] return items=" + list.size() + " pageCount=" + pageCount);
+            Logger.log("DEBUG", "[WanMei-DEBUG] return items=" + list.size() + " pageCount=" + pageCount);
             return Result.get().vod(list).page(page, pageCount, 24, total).string();
 
         } catch (Exception e) {
-            Log.d("WanMei", "[WanMei] Exception: " + e.getClass().getSimpleName() + " " + e.getMessage());
+            Logger.log("DEBUG", "[WanMei] Exception: " + e.getClass().getSimpleName() + " " + e.getMessage());
             // 异常信息带上下文，TVBox 界面会显示，方便用户截图定位
             throw new Exception("[WanMei] 分类获取失败: tid=" + tid + ", page=" + page + ", url=" + url + ", 原因=" + e.getMessage(), e);
         }
@@ -246,6 +249,7 @@ public class WanMei extends Spider {
 
     @Override
     public String detailContent(List<String> ids) throws Exception {
+        Logger.log("DEBUG", "[WanMei-detailContent] start");
         if (ids == null || ids.isEmpty()) return "";
         String id = ids.get(0);
 
@@ -373,6 +377,7 @@ public class WanMei extends Spider {
 
     @Override
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
+        Logger.log("DEBUG", "[WanMei-playerContent] start");
         if (TextUtils.isEmpty(id)) {
             return Result.get().url("").string();
         }
@@ -414,6 +419,7 @@ public class WanMei extends Spider {
 
     @Override
     public String searchContent(String key, boolean quick) throws Exception {
+        Logger.log("DEBUG", "[WanMei-searchContent] start");
         return searchContent(key, quick, "1");
     }
 
