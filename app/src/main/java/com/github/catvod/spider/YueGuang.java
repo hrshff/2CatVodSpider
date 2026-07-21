@@ -72,13 +72,18 @@ public class YueGuang extends Spider {
     }
 
     private String fetch(String url, String referer) throws Exception {
+        Log.d("YueGuang", "[YueGuang] HTTP Request: " + url);
+        long start = System.currentTimeMillis();
         Request request = new Request.Builder()
             .url(url)
             .header("User-Agent", Util.CHROME)
             .header("Referer", TextUtils.isEmpty(referer) ? SITE_URL + "/" : referer)
             .build();
         try (Response response = client().newCall(request).execute()) {
-            return response.body() != null ? response.body().string() : "";
+            String html = response.body() != null ? response.body().string() : "";
+            long cost = System.currentTimeMillis() - start;
+            Log.d("YueGuang", "[YueGuang] HTTP Response: code=" + response.code() + " len=" + html.length() + " cost=" + cost + "ms");
+            return html;
         }
     }
 
@@ -197,7 +202,12 @@ public class YueGuang extends Spider {
         if (!list.isEmpty() && true) {
             list.get(0).setVodRemarks("items=" + list.size() + "|pageCount=" + pageCount + "|limit=" + limit);
         }
-        return Result.get().vod(list).page(page, pageCount, limit, total).string();
+        try {
+            return Result.get().vod(list).page(page, pageCount, limit, total).string();
+        } catch (Exception e) {
+            Log.d("YueGuang", "[YueGuang] Exception: " + e.getMessage());
+            throw new Exception("[YueGuang] 分类获取失败: tid=" + tid + ", page=" + page + ", 原因=" + e.getMessage(), e);
+        }
     }
 
     @Override

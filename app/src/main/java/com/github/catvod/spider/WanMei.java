@@ -39,7 +39,12 @@ public class WanMei extends Spider {
     }
 
     private String fetch(String url) {
-        return OkHttp.string(url, getHeaders());
+        Log.d("WanMei", "[WanMei] HTTP Request: " + url);
+        long start = System.currentTimeMillis();
+        String html = OkHttp.string(url, getHeaders());
+        long cost = System.currentTimeMillis() - start;
+        Log.d("WanMei", "[WanMei] HTTP Response: code=200 len=" + (html != null ? html.length() : 0) + " cost=" + cost + "ms");
+        return html;
     }
 
     private String fixUrl(String url) {
@@ -233,8 +238,9 @@ public class WanMei extends Spider {
             return Result.get().vod(list).page(page, pageCount, 24, total).string();
 
         } catch (Exception e) {
-            Log.d("WanMei", "[WanMei-DEBUG] Exception: " + e.getClass().getSimpleName() + " " + e.getMessage());
-            return Result.get().vod(list).page(page, page, 24, 0).string();
+            Log.d("WanMei", "[WanMei] Exception: " + e.getClass().getSimpleName() + " " + e.getMessage());
+            // 异常信息带上下文，TVBox 界面会显示，方便用户截图定位
+            throw new Exception("[WanMei] 分类获取失败: tid=" + tid + ", page=" + page + ", url=" + url + ", 原因=" + e.getMessage(), e);
         }
     }
 

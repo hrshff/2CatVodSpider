@@ -39,7 +39,12 @@ public class Mogu extends Spider {
     }
 
     private String fetch(String url) {
-        return OkHttp.string(url, getHeaders());
+        Log.d("Mogu", "[Mogu] HTTP Request: " + url);
+        long start = System.currentTimeMillis();
+        String html = OkHttp.string(url, getHeaders());
+        long cost = System.currentTimeMillis() - start;
+        Log.d("Mogu", "[Mogu] HTTP Response: len=" + (html != null ? html.length() : 0) + " cost=" + cost + "ms");
+        return html;
     }
 
     private String fixUrl(String url) {
@@ -151,7 +156,12 @@ public class Mogu extends Spider {
         if (!list.isEmpty() && true) {
             list.get(0).setVodRemarks("items=" + list.size() + "|hasNext=" + hasNext);
         }
-        return Result.get().vod(list).page(page, pageCount, 24, total).string();
+        try {
+            return Result.get().vod(list).page(page, pageCount, 24, total).string();
+        } catch (Exception e) {
+            Log.d("Mogu", "[Mogu] Exception: " + e.getMessage());
+            throw new Exception("[Mogu] 分类获取失败: tid=" + tid + ", page=" + page + ", 原因=" + e.getMessage(), e);
+        }
     }
 
     @Override
@@ -340,6 +350,11 @@ public class Mogu extends Spider {
         if (!list.isEmpty() && true) {
             list.get(0).setVodRemarks("items=" + list.size() + "|hasNext=" + hasNext);
         }
-        return Result.get().vod(list).page(page, pageCount, 24, total).string();
+        try {
+            return Result.get().vod(list).page(page, pageCount, 24, total).string();
+        } catch (Exception e) {
+            Log.d("Mogu", "[Mogu] Exception: " + e.getMessage());
+            throw new Exception("[Mogu] 分类获取失败: tid=" + tid + ", page=" + page + ", 原因=" + e.getMessage(), e);
+        }
     }
 }
